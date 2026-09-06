@@ -19,7 +19,8 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const STORAGE = {
   reports: "ner-logix-field-reports-v2",
   alerts: "ner-logix-alerts-v2",
