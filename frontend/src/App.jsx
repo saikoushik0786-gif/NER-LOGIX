@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "./auth/AuthContext";
+import DriverRegistrations from "./pages/DriverRegistrations.jsx";
 import {
   ResponsiveContainer,
   LineChart,
@@ -14,7 +16,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
@@ -61,9 +63,9 @@ const routeCandidates = [
 const riskyRoad = [[26.1445,91.7362],[26.5,92.2],[27.0,92.7],[27.586,91.859]];
 
 const initialAlerts = [
-  { id: 1, type: "Landslide Risk Detected", icon: "⚠️", severity: "Critical", location: "NH-13 · Tawang", description: "Landslide probability is high. Alternate routing is recommended.", time: "5 min ago", status: "Open" },
-  { id: 2, type: "Heavy Rainfall", icon: "🌧️", severity: "High", location: "West Kameng District", description: "Heavy rainfall may affect road accessibility and delivery times.", time: "18 min ago", status: "Open" },
-  { id: 3, type: "Delivery Delayed", icon: "🚚", severity: "Medium", location: "Medicine · NER-MED-104", description: "Medicine delivery is experiencing an expected route delay.", time: "32 min ago", status: "Open" },
+  { id: 1, type: "Landslide Risk Detected", icon: "⚠️", severity: "Critical", location: "NH-13 · Tawang", latitude: 27.586, longitude: 91.859, description: "Landslide probability is high. Alternate routing is recommended.", time: "5 min ago", status: "Open" },
+  { id: 2, type: "Heavy Rainfall", icon: "🌧️", severity: "High", location: "West Kameng District", latitude: 27.264, longitude: 92.424, description: "Heavy rainfall may affect road accessibility and delivery times.", time: "18 min ago", status: "Open" },
+  { id: 3, type: "Delivery Delayed", icon: "🚚", severity: "Medium", location: "Medicine · NER-MED-104", latitude: 26.65, longitude: 92.35, description: "Medicine delivery is experiencing an expected route delay.", time: "32 min ago", status: "Open" },
   { id: 4, type: "GPS Tracking Active", icon: "📡", severity: "Low", location: "Fleet telemetry", description: "Vehicle GPS telemetry is synchronized across the monitored fleet.", time: "Now", status: "Open" },
 ];
 
@@ -104,20 +106,33 @@ function iconFor(type) { return ({Landslide:"⛰️",Flood:"🌊","Road Blockage
 function sevClass(s) { return s==="Critical"||s==="High" ? "danger" : s==="Medium" ? "warning" : "positive"; }
 function usePersistent(key, fallback) { const [value,setValue]=useState(()=>readStorage(key,fallback)); useEffect(()=>writeStorage(key,value),[key,value]); return [value,setValue]; }
 
-function Header({ title, subtitle, language, setLanguage, alertCount, setPage, isOnline, backendOnline, pendingSyncCount }) {
+function Header({ title, subtitle, language, setLanguage, alertCount, setPage, isOnline, backendOnline, pendingSyncCount, user, logout }) {
   return <header className="header" style={{alignItems:"center"}}>
     <div><div className="region-title">NORTH EASTERN REGION · NER-LOGIX</div><h1>{title}</h1><p>{subtitle}</p></div>
     <div className="header-actions" style={{gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
       <span style={{padding:"7px 11px",borderRadius:999,background:isOnline?"#ecfdf5":"#fff7ed",border:`1px solid ${isOnline?"#bbf7d0":"#fed7aa"}`,fontSize:12,fontWeight:700}}>{isOnline?"● ONLINE":"● OFFLINE"}{pendingSyncCount>0?` · ${pendingSyncCount} pending`:""}</span>
       <button className="language-button" onClick={()=>setLanguage(language==="EN"?"HI":language==="HI"?"AS":"EN")}>🌐 {language}</button>
       <button className="notification-button" onClick={()=>setPage("Alerts")}>🔔 {alertCount}</button>
-      <div className="profile">KO</div>
+      <div className="profile" title={user?.role || "User"}>{(user?.name || user?.username || "U").slice(0,2).toUpperCase()}</div>
+      <button className="view-button" onClick={logout} style={{fontWeight:700}}>🚪 Logout</button>
     </div>
   </header>;
 }
 
-function Shell({children, page, setPage, alertCount, language, setLanguage, isOnline, backendOnline, pendingSyncCount, title, subtitle}) {
-  const menu=[ ["📊","Dashboard"],["🗺️","Live Map"],["🚚","Vehicles"],["⚠️","Risk Analysis"],["🧭","Route Optimizer"],["🚨","Alerts"],["📍","Field Reports"],["📈","Analytics"],["🆘","Emergency Center"] ];
+function Shell({children, page, setPage, alertCount, language, setLanguage, isOnline, backendOnline, pendingSyncCount, title, subtitle, user, logout}) {
+  const allMenu=[
+    ["📊","Dashboard"],["🗺️","Live Map"],["🚚","Vehicles"],
+    ["⚠️","Risk Analysis"],["🧭","Route Optimizer"],["🚨","Alerts"],
+    ["📍","Field Reports"],["📈","Analytics"],["🆘","Emergency Center"],
+    ["👤","Driver Registrations"]
+  ];
+  const roleAccess={
+    GOVERNMENT_ADMIN:["Dashboard","Live Map","Vehicles","Risk Analysis","Route Optimizer","Alerts","Field Reports","Analytics","Emergency Center","Driver Registrations"],
+    FIELD_OFFICER:["Dashboard","Live Map","Alerts","Field Reports","Emergency Center"],
+    DRIVER:["Dashboard","Live Map","Route Optimizer","Alerts"]
+  };
+  const allowedPages=roleAccess[user?.role] || ["Dashboard"];
+  const menu=allMenu.filter(([,name])=>allowedPages.includes(name));
   return <div className="app">
     <aside className="sidebar" style={{display:"flex",flexDirection:"column"}}>
       <div className="brand"><div className="brand-logo">NL</div><div><h2>NER-LOGIX</h2><span>Smart Logistics</span></div></div>
@@ -127,17 +142,8 @@ function Shell({children, page, setPage, alertCount, language, setLanguage, isOn
         <div style={{marginTop:10,padding:"10px 12px",borderRadius:12,background:"rgba(255,255,255,.06)",fontSize:11,lineHeight:1.5}}><b>Demo Control</b><br/>Local simulation · GIS · AI risk · GPS</div>
       </div>
     </aside>
-    <main className="main"><Header {...{title,subtitle,language,setLanguage,alertCount,setPage,isOnline,backendOnline,pendingSyncCount}} />{children}</main>
+    <main className="main"><Header {...{title,subtitle,language,setLanguage,alertCount,setPage,isOnline,backendOnline,pendingSyncCount,user,logout}} />{children}</main>
   </div>;
-}
-
-function MapAutoFit({positions,enabled=true}) {
-  const map = useMap();
-  useEffect(() => {
-    if (!enabled || !positions || positions.length < 2) return;
-    map.fitBounds(positions, { padding: [35, 35], maxZoom: 10 });
-  }, [map, enabled, positions]);
-  return null;
 }
 
 function MapPickHandler({enabled, onPick}) {
@@ -150,13 +156,68 @@ function MapPickHandler({enabled, onPick}) {
   return null;
 }
 
-function MapView({vehicles,riskScore,showSaferRoute,selectedRoute,compact=false,routeGeometry=[],origin=null,destination=null,pickMode=null,onMapPick=null}) {
+function MapView({
+  vehicles,
+  reports = [],
+  alerts = [],
+  alternatives = [],
+  riskScore,
+  showSaferRoute,
+  selectedRoute,
+  compact = false,
+  routeGeometry = [],
+  origin = null,
+  destination = null,
+  pickMode = null,
+  onMapPick = null,
+}) {
   const routePositions = Array.isArray(routeGeometry)
     ? routeGeometry.filter(p => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])))
     : [];
   const hasRoute = routePositions.length >= 2;
   const routeStart = hasRoute ? routePositions[0] : origin;
   const routeEnd = hasRoute ? routePositions[routePositions.length - 1] : destination;
+  const alertRoute = [...(alternatives || [])]
+  .filter(
+    (r) =>
+      Array.isArray(r?.geometry) &&
+      r.geometry.length >= 2 &&
+      r.route_id !== selectedRoute?.route_id
+  )
+  .sort(
+    (a, b) =>
+      safeNumber(b?.risk_score, 0) -
+      safeNumber(a?.risk_score, 0)
+  )[0];
+
+const alertRoutePositions = Array.isArray(alertRoute?.geometry)
+  ? alertRoute.geometry
+      .filter(
+        (p) =>
+          Array.isArray(p) &&
+          p.length >= 2 &&
+          Number.isFinite(Number(p[0])) &&
+          Number.isFinite(Number(p[1]))
+      )
+      .map((p) => [Number(p[0]), Number(p[1])])
+  : [];
+
+const hasAlertRoute = alertRoutePositions.length >= 2;
+
+const activeReports = (reports || []).filter((r) => {
+    const status = String(r?.status || "Open").trim().toLowerCase();
+    const lat = Number(r?.latitude ?? r?.lat);
+    const lng = Number(r?.longitude ?? r?.lng ?? r?.lon);
+    return status !== "resolved" && Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+  });
+  const activeAlerts = (alerts || []).filter((a) => {
+    const status = String(a?.status || "Open").trim().toLowerCase();
+    const lat = Number(a?.latitude ?? a?.lat);
+    const lng = Number(a?.longitude ?? a?.lng ?? a?.lon);
+    return status === "open" && Number.isFinite(lat) && Number.isFinite(lng) &&
+      lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+  });
+  const reportPositions = activeReports.map((r) => [Number(r.latitude ?? r.lat), Number(r.longitude ?? r.lng ?? r.lon)]);
   const waypointIndexes = hasRoute
     ? [0, Math.floor(routePositions.length * 0.25), Math.floor(routePositions.length * 0.5), Math.floor(routePositions.length * 0.75), routePositions.length - 1]
         .filter((v, i, a) => v >= 0 && v < routePositions.length && a.indexOf(v) === i)
@@ -168,10 +229,127 @@ function MapView({vehicles,riskScore,showSaferRoute,selectedRoute,compact=false,
 
     {locations.map(l=><Marker key={l.name} position={l.position}><Popup><b>{l.name}</b><br/>Status: {l.status}<br/>Risk: {l.risk}/100</Popup></Marker>)}
     {vehicles.map(v=><Marker key={v.id} position={v.position}><Popup><b>🚚 {v.id}</b><br/>Cargo: {v.cargo}<br/>Route: {v.route}<br/>Speed: {v.speed} km/h<br/>Fuel: {v.fuel}%<br/>Risk: {v.riskScore}/100<br/>ETA: {formatTravelTime(v.etaMinutes)}<br/>GPS: Active</Popup></Marker>)}
+    {/* LIVE ALERT MARKERS */}
+    {activeAlerts.map((alert) => {
+      const lat = Number(alert.latitude ?? alert.lat);
+      const lng = Number(alert.longitude ?? alert.lng ?? alert.lon);
+      const color = alert.severity === "Critical" ? "#991b1b" : alert.severity === "High" ? "#dc2626" : alert.severity === "Medium" ? "#f59e0b" : "#16a34a";
+      return (
+        <CircleMarker key={`alert-${alert.id}`} center={[lat, lng]} radius={10} pathOptions={{ color, fillColor: color, fillOpacity: 0.88, weight: 3 }}>
+          <Popup>
+            <div style={{minWidth:210}}>
+              <strong>{alert.icon || "🚨"} {alert.type}</strong><br/>
+              <b>Severity:</b> {alert.severity}<br/>
+              <b>Location:</b> {alert.location}<br/>
+              <b>Status:</b> {alert.status}<br/>
+              <div style={{marginTop:6}}>{alert.description || "Operational alert detected in the monitored corridor."}</div>
+            </div>
+          </Popup>
+        </CircleMarker>
+      );
+    })}
+    {/* FIELD REPORT / INCIDENT MARKERS */}
+{activeReports.map((report) => {
+  const lat = Number(report.latitude ?? report.lat);
+  const lng = Number(report.longitude ?? report.lng ?? report.lon);
 
+  const markerColor =
+    report.severity === "Critical"
+      ? "#dc2626"
+      : report.severity === "High"
+      ? "#ea580c"
+      : report.severity === "Medium"
+      ? "#f59e0b"
+      : "#16a34a";
+
+  return (
+    <CircleMarker
+      key={`report-${report.id}`}
+      center={[lat, lng]}
+      radius={14}
+      pathOptions={{
+        color: markerColor,
+        fillColor: "#ffffff",
+        fillOpacity: 1,
+        weight: 5,
+      }}
+    >
+      <Popup>
+        <div style={{ minWidth: 210 }}>
+          <strong style={{ fontSize: 15 }}>
+            {report.icon || "🚨"} {report.type}
+          </strong>
+
+          <div style={{ marginTop: 6 }}>
+            <b>Severity:</b>{" "}
+            <span style={{ color: markerColor }}>
+              {report.severity}
+            </span>
+          </div>
+
+          <div>
+            <b>Location:</b> {report.location}
+          </div>
+
+          <div>
+            <b>Reporter:</b> {report.reporter}
+          </div>
+
+          <div>
+            <b>Coordinates:</b>{" "}
+            {lat.toFixed(5)}, {lng.toFixed(5)}
+          </div>
+
+          <div style={{ marginTop: 6 }}>
+            {report.description}
+          </div>
+
+          {["High", "Critical"].includes(report.severity) && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: "7px 9px",
+                borderRadius: 8,
+                background: "#fef2f2",
+                color: "#b91c1c",
+                fontWeight: 700,
+              }}
+            >
+              🚨 ALERT ROUTE AFFECTED
+            </div>
+          )}
+        </div>
+      </Popup>
+    </CircleMarker>
+  );
+})}
     <Polyline positions={riskyRoad} pathOptions={{color:"#ef4444",weight:6,opacity:.8}}>
       <Popup><b>⚠️ High Risk Corridor</b><br/>NH-13 / Tawang · Risk {safeNumber(riskScore,69)}/100</Popup>
     </Polyline>
+    {/* AI IDENTIFIED ALERT / AFFECTED ROUTE */}
+{hasAlertRoute && (
+  <Polyline
+    positions={alertRoutePositions}
+    pathOptions={{
+      color: "#dc2626",
+      weight: 7,
+      opacity: 0.9,
+      dashArray: "14 9",
+      lineCap: "round",
+      lineJoin: "round",
+    }}
+  >
+    <Popup>
+      <b>🚨 Alert / Affected Route</b>
+      <br />
+      {alertRoute.name}
+      <br />
+      Risk: {safeNumber(alertRoute.risk_score, "—")}/100
+      <br />
+      Distance: {safeNumber(alertRoute.distance_km, 0).toFixed(1)} km
+    </Popup>
+  </Polyline>
+)}
 
     {/* ONE shared AI route layer. Dashboard and Route Optimizer use this exact geometry. */}
     {showSaferRoute && hasRoute && <>
@@ -187,25 +365,24 @@ function MapView({vehicles,riskScore,showSaferRoute,selectedRoute,compact=false,
 
     {pickMode && origin && <CircleMarker center={origin} radius={9} pathOptions={{color:"#2563eb",fillColor:"#2563eb",fillOpacity:.95,weight:3}}><Popup><b>🟦 Origin</b></Popup></CircleMarker>}
     {pickMode && destination && <CircleMarker center={destination} radius={9} pathOptions={{color:"#7c3aed",fillColor:"#7c3aed",fillOpacity:.95,weight:3}}><Popup><b>🟣 Destination</b></Popup></CircleMarker>}
-    {hasRoute && <MapAutoFit positions={routePositions} enabled={true} />}
   </MapContainer>;
 }
 
-function Dashboard({vehicles,alerts,riskScore,riskLevel,riskFactors,recommendation,backendOnline,aiLoading,aiError,fetchRisk,findRoute,routeLoading,selectedRoute,routeGeometry,origin,destination,setPage,isOnline,pendingSyncCount}) {
+function Dashboard({vehicles,reports,alerts,alternatives,riskScore,riskLevel,riskFactors,recommendation,backendOnline,aiLoading,aiError,fetchRisk,findRoute,routeLoading,selectedRoute,routeGeometry,origin,destination,setPage,isOnline,pendingSyncCount}) {
   const active=alerts.filter(a=>a.status==="Open").length; const moving=vehicles.filter(v=>v.status==="Moving").length;
-  const displayRiskScore=selectedRoute ? safeNumber(selectedRoute.risk_score,riskScore) : safeNumber(riskScore,69);
-  const displayRiskLevel=selectedRoute ? riskLabel(displayRiskScore) : riskLevel;
+  const displayRiskScore=safeNumber(riskScore,69);
+  const displayRiskLevel=riskLabel(displayRiskScore);
   const avgFuel=Math.round(vehicles.reduce((s,v)=>s+v.fuel,0)/vehicles.length); const avgRisk=Math.round(vehicles.reduce((s,v)=>s+v.riskScore,0)/vehicles.length);
   return <>
     {!isOnline&&<div style={{marginBottom:16,padding:"13px 16px",borderRadius:14,background:"#fff7ed",border:"1px solid #fed7aa",display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><b>🟠 Offline Mode Active</b><span>Field updates remain on this device. {pendingSyncCount} report(s) waiting for sync.</span></div>}
     <section className="stats-grid">
-      {[ ["🚚","Active Vehicles",vehicles.length,`${moving} moving`],["🛣️","Accessible Roads","87%","Across monitored districts"],["⚠️","High Risk Corridors","07","Requires attention"],["🚨","Active Alerts",active,"Real-time response queue"],["⛽","Average Fuel",`${avgFuel}%`,"Fleet average"],["🧠",selectedRoute?"Route AI Risk":"AI Risk",`${displayRiskScore}/100`,displayRiskLevel] ].map(([i,l,v,s],idx)=><div className="stat-card" key={l}><div className="stat-icon">{i}</div><div><span>{l}</span><strong className={idx===3||(idx===5&&displayRiskScore>=60)?"danger":""}>{v}</strong><small>{s}</small></div></div>)}
+      {[ ["🚚","Active Vehicles",vehicles.length,`${moving} moving`],["🛣️","Accessible Roads","87%","Across monitored districts"],["⚠️","High Risk Corridors","07","Requires attention"],["🚨","Active Alerts",active,"Real-time response queue"],["⛽","Average Fuel",`${avgFuel}%`,"Fleet average"],["🧠","AI Risk",`${displayRiskScore}/100`,displayRiskLevel] ].map(([i,l,v,s],idx)=><div className="stat-card" key={l}><div className="stat-icon">{i}</div><div><span>{l}</span><strong className={idx===3||(idx===5&&displayRiskScore>=60)?"danger":""}>{v}</strong><small>{s}</small></div></div>)}
     </section>
     <section className="content-grid">
-      <div className="panel map-panel"><div className="panel-header"><div><h2>🗺️ Regional Operations Map</h2><p>Live GIS view · corridors · fleet · risk zones</p></div><span className="live-badge">● LIVE GIS</span></div><MapView vehicles={vehicles} riskScore={riskScore} showSaferRoute={routeGeometry.length >= 2} selectedRoute={selectedRoute} routeGeometry={routeGeometry} origin={origin} destination={destination}/><div className="map-legend"><span>🟢 Safe</span><span>🟠 Moderate</span><span>🔴 High Risk</span><span>🟢┄ AI Safer Route · green waypoints</span></div></div>
+      <div className="panel map-panel"><div className="panel-header"><div><h2>🗺️ Regional Operations Map</h2><p>Live GIS view · corridors · fleet · risk zones</p></div><span className="live-badge">● LIVE GIS</span></div><MapView vehicles={vehicles} reports={reports} alerts={alerts} alternatives={alternatives} riskScore={riskScore} showSaferRoute={routeGeometry.length >= 2} selectedRoute={selectedRoute} routeGeometry={routeGeometry} origin={origin} destination={destination}/><div className="map-legend"><span>🟢 Safe</span><span>🟠 Moderate</span><span>🔴 High Risk</span><span>🟢┄ AI Safer Route · green waypoints</span></div></div>
       <div className="panel risk-panel"><div className="panel-header"><div><h2>🤖 AI Risk Command</h2><p>NH-13 · Tawang corridor</p></div>{backendOnline&&<span className="live-badge">● AI LIVE</span>}</div>
         {aiError&&<div className="route-message">⚠️ {aiError}</div>}
-        <div className="risk-score"><div className="score-circle"><strong>{aiLoading?"--":displayRiskScore}</strong><span>/100</span></div><div><h2 className={riskClass(displayRiskScore)}>{aiLoading?"Analyzing...":`${displayRiskLevel} Risk`}</h2><p>{selectedRoute?"Selected route safety assessment":"Current corridor assessment"}</p></div></div>
+        <div className="risk-score"><div className="score-circle"><strong>{aiLoading?"--":displayRiskScore}</strong><span>/100</span></div><div><h2 className={riskClass(displayRiskScore)}>{aiLoading?"Analyzing...":`${displayRiskLevel} Risk`}</h2><p>Current corridor assessment · synchronized with Analytics</p></div></div>
         <div className="risk-factors">{[["🌧️","Rainfall",riskFactors.rainfall],["⛰️","Landslide",riskFactors.landslide_history],["🚗","Traffic",riskFactors.traffic],["🛣️","Road Damage",riskFactors.road_damage],["🏔️","Terrain",riskFactors.terrain]].map(([i,n,v])=><div key={n}><span>{i} {n}</span><strong className={riskClass(v)}>{v>=70?"High":v>=40?"Medium":"Low"}</strong></div>)}</div>
         <div className="route-message"><b>💡 AI Recommendation</b><p>{recommendation}</p>{selectedRoute&&<small style={{display:"block",marginTop:8,fontWeight:700}}>Route risk: {displayRiskScore}/100 · Corridor baseline: {safeNumber(riskScore,69)}/100</small>}</div>
         <button className="route-button" onClick={fetchRisk} disabled={aiLoading}>{aiLoading?"🤖 Analyzing...":"🔄 Refresh AI Assessment"}</button>
@@ -220,13 +397,13 @@ function Dashboard({vehicles,alerts,riskScore,riskLevel,riskFactors,recommendati
   </>;
 }
 
-function GenericMapPage({vehicles,riskScore,selectedRoute,setPage,routeGeometry,origin,destination}) { return <div className="panel"><div className="panel-header"><div><h2>🗺️ Live Regional Map</h2><p>GIS operations view with vehicles, risk corridors and AI alternate routing</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><MapView vehicles={vehicles} riskScore={riskScore} showSaferRoute={routeGeometry.length >= 2} selectedRoute={selectedRoute} routeGeometry={routeGeometry} origin={origin} destination={destination}/><div className="route-message" style={{marginTop:14}}><b>Map intelligence</b><p>Red corridor indicates elevated risk. Green dashed corridor represents the AI-selected route. Use Route Optimizer to choose any monitored location or click directly on the map to set endpoints.</p></div></div>; }
+function GenericMapPage({vehicles,reports,alerts,alternatives,riskScore,selectedRoute,setPage,routeGeometry,origin,destination}) { return <div className="panel"><div className="panel-header"><div><h2>🗺️ Live Regional Map</h2><p>GIS operations view with vehicles, risk corridors and AI alternate routing</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><MapView vehicles={vehicles} reports={reports} alerts={alerts} alternatives={alternatives} riskScore={riskScore} showSaferRoute={routeGeometry.length >= 2} selectedRoute={selectedRoute} routeGeometry={routeGeometry} origin={origin} destination={destination}/><div className="route-message" style={{marginTop:14}}><b>Map intelligence</b><p>Red corridor indicates elevated risk. Green dashed corridor represents the AI-selected route. Use Route Optimizer to choose any monitored location or click directly on the map to set endpoints.</p></div></div>; }
 
 function VehiclesPage({vehicles,setPage}) { return <div className="panel"><div className="panel-header"><div><h2>🚚 Fleet & GPS Command</h2><p>Live logistics vehicle telemetry across monitored corridors</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginTop:18}}>{vehicles.map(v=><div key={v.id} style={{border:"1px solid #e5e7eb",borderRadius:16,padding:18,background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><h3 style={{margin:"0 0 4px"}}>🚚 {v.id}</h3><small>{v.driver}</small></div><span className="live-badge">● LIVE</span></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:18}}>{[["Cargo",`${v.cargoIcon} ${v.cargo}`],["Status",v.status],["Speed",`${v.speed} km/h`],["Fuel",`${v.fuel}%`],["ETA",formatTravelTime(v.etaMinutes)],["Risk",`${v.riskScore}/100 · ${riskLabel(v.riskScore)}`]].map(([a,b])=><div key={a}><small>{a}</small><div className={a==="Risk"?riskClass(v.riskScore):""} style={{fontWeight:600}}>{b}</div></div>)}</div><div style={{marginTop:16}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12}}><span>Delivery progress</span><b>{progress(v)}%</b></div><div style={{height:8,background:"#e5e7eb",borderRadius:10,marginTop:6,overflow:"hidden"}}><div style={{height:"100%",width:`${progress(v)}%`,background:"#2563eb"}}/></div></div><div style={{marginTop:14,fontSize:12,color:"#6b7280"}}>📍 {v.position[0].toFixed(4)}, {v.position[1].toFixed(4)}</div></div>)}</div></div>; }
 
 function RiskPage({riskScore,riskLevel,riskFactors,recommendation,fetchRisk,aiLoading,backendOnline,setPage}) { return <div className="panel"><div className="panel-header"><div><h2>⚠️ AI Risk Analysis</h2><p>Explainable corridor risk assessment from the FastAPI risk engine</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div style={{display:"grid",gridTemplateColumns:"minmax(250px,.7fr) minmax(320px,1.3fr)",gap:20,marginTop:20}}><div style={{display:"grid",placeItems:"center",padding:20}}><div className="score-circle" style={{width:190,height:190}}><strong>{aiLoading?"--":riskScore}</strong><span>/100</span></div><h2 className={riskClass(riskScore)} style={{marginTop:15}}>{riskLevel} Risk</h2><span>{backendOnline?"● Connected to FastAPI":"● Backend unavailable"}</span></div><div><h3>Risk factor breakdown</h3>{Object.entries(riskFactors).map(([k,v])=><div key={k} style={{margin:"18px 0"}}><div style={{display:"flex",justifyContent:"space-between"}}><b>{k.replaceAll("_"," ")}</b><b>{v}/100</b></div><div style={{height:11,background:"#e5e7eb",borderRadius:8,marginTop:6}}><div style={{height:"100%",width:`${v}%`,background:v>=70?"#ef4444":v>=40?"#f59e0b":"#22c55e",borderRadius:8}}/></div></div>)}<div className="route-message"><b>🤖 Recommendation</b><p>{recommendation}</p></div><button className="route-button" onClick={fetchRisk} disabled={aiLoading}>{aiLoading?"Analyzing...":"Run Fresh Prediction"}</button></div></div></div>; }
 
-function RoutePage({vehicles,riskScore,selectedRoute,alternatives,findRoute,loading,setPage,originName,destinationName,setOriginName,setDestinationName,origin,destination,routeGeometry,routeDistance,routeDuration,routeError,pickMode,setPickMode,onMapPick,setOrigin,setDestination,setSelectedRoute,setAlternatives,setRouteGeometry,setRouteDistance,setRouteDuration,setRouteError}) {
+function RoutePage({vehicles,reports,alerts,riskScore,selectedRoute,alternatives,findRoute,loading,setPage,originName,destinationName,setOriginName,setDestinationName,origin,destination,routeGeometry,routeDistance,routeDuration,routeError,pickMode,setPickMode,onMapPick,setOrigin,setDestination,setSelectedRoute,setAlternatives,setRouteGeometry,setRouteDistance,setRouteDuration,setRouteError}) {
   const endpointOptions = locations.map(l => l.name);
   return <div className="panel">
     <div className="panel-header"><div><h2>🧭 AI Route Optimizer</h2><p>Choose endpoints, calculate a real road route, then score it for safety, delay and accessibility.</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div>
@@ -235,20 +412,52 @@ function RoutePage({vehicles,riskScore,selectedRoute,alternatives,findRoute,load
       <div className="form-group"><label>Destination</label><select value={endpointOptions.includes(destinationName)?destinationName:""} onChange={e=>{const value=e.target.value;const loc=locations.find(l=>l.name===value);if(loc){setDestinationName(loc.name);setDestination(loc.position);setRouteGeometry([]);setRouteDistance(0);setRouteDuration(0);setSelectedRoute(null);setAlternatives([]);setRouteError("");}setPickMode(null)}}><option value="">Select destination</option>{endpointOptions.map(x=><option key={x}>{x}</option>)}</select><button className="view-button" onClick={()=>setPickMode("destination")} style={{marginTop:7,width:"100%"}}>{pickMode==="destination"?"📍 Click map to set destination":"📍 Pick destination from map"}</button></div>
     </div>
     {pickMode&&<div className="route-message"><b>📍 Map selection active</b><p>Click anywhere on the map to set the {pickMode}. The selected coordinates will be used for routing.</p></div>}
-    <MapView vehicles={vehicles} riskScore={riskScore} showSaferRoute={routeGeometry.length >= 2} selectedRoute={selectedRoute} routeGeometry={routeGeometry} origin={origin} destination={destination} compact pickMode={pickMode} onMapPick={onMapPick}/>
+    <MapView vehicles={vehicles} reports={reports} alerts={alerts} alternatives={alternatives} riskScore={riskScore} showSaferRoute={routeGeometry.length >= 2} selectedRoute={selectedRoute} routeGeometry={routeGeometry} origin={origin} destination={destination} compact pickMode={pickMode} onMapPick={onMapPick}/>
     <button className="route-button" onClick={()=>findRoute(origin,destination)} disabled={loading || !origin || !destination} style={{marginTop:14}}>{loading?"🧠 Calculating road route...":"🧭 Get Route & AI Safety Score"}</button>
     {routeError&&<div className="route-message" style={{marginTop:12}}><b>⚠️ Routing service note</b><p>{routeError}</p></div>}
-    {selectedRoute&&<div className="route-message" style={{marginTop:15}}><b>🏆 Recommended route</b><h3>{selectedRoute.name}</h3><p>{routeDistance?`${routeDistance.toFixed(1)} km · ${formatTravelTime(routeDuration)}`:`${selectedRoute.distance_km} km · ${formatTravelTime(selectedRoute.estimated_minutes)}`} · Risk {selectedRoute.risk_score}/100 · Optimization score {selectedRoute.optimization_score}</p></div>}
+    {selectedRoute&&<div className="route-message" style={{marginTop:15}}>
+  <b>🏆 Recommended route</b>
+  <h3>{selectedRoute.name}</h3>
+
+  <p>
+    {routeDistance
+      ? `${routeDistance.toFixed(1)} km · ${formatTravelTime(routeDuration)}`
+      : `${selectedRoute.distance_km} km · ${formatTravelTime(selectedRoute.estimated_minutes)}`}
+    {" · "}
+    Risk {selectedRoute.risk_score}/100
+    {" · "}
+    Optimization score {selectedRoute.optimization_score}
+  </p>
+
+  <button
+    className="route-button"
+    style={{marginTop:10}}
+    onClick={() => {
+      if (!origin || !destination) return;
+
+      const url =
+        `https://www.google.com/maps/dir/?api=1` +
+        `&origin=${encodeURIComponent(`${origin[0]},${origin[1]}`)}` +
+        `&destination=${encodeURIComponent(`${destination[0]},${destination[1]}`)}` +
+        `&travelmode=driving`;
+
+      window.open(url, "_blank", "noopener,noreferrer");
+    }}
+  >
+    🗺️ Open Route in Google Maps
+  </button>
+</div>}
     <div style={{display:"grid",gap:12,marginTop:18}}>{(alternatives.length?alternatives:routeCandidates.map(r=>({...r,optimization_score:routeScore(r)}))).map(r=><div key={r.route_id} style={{border:"1px solid #e5e7eb",borderRadius:14,padding:16,background:r.route_id===selectedRoute?.route_id?"#f0fdf4":"#fff"}}><div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><b>{r.route_id} · {r.name}</b><span className={riskClass(r.risk_score)}>{riskLabel(r.risk_score)} · {r.risk_score}/100</span></div><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginTop:12,fontSize:13}}><span>📏 {Number(r.distance_km).toFixed(1)} km</span><span>⏱️ {formatTravelTime(r.estimated_minutes)}</span><span>⏳ +{r.delay_minutes} min</span><span>🛣️ {r.road_condition}</span></div></div>)}</div>
   </div>;
 }
 
 function AlertsPage({alerts,resolve,refresh,setPage}) { const [filter,setFilter]=useState("All"); const list=filter==="All"?alerts:alerts.filter(a=>a.severity===filter); const counts={Open:alerts.filter(a=>a.status==="Open").length,Critical:alerts.filter(a=>a.status==="Open"&&a.severity==="Critical").length,High:alerts.filter(a=>a.status==="Open"&&a.severity==="High").length}; return <><div className="panel"><div className="panel-header"><div><h2>🚨 Alerts & Notifications</h2><p>Centralized logistics, accessibility and emergency response queue</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div className="stats-grid" style={{marginTop:18}}>{[["🔔","Open Alerts",counts.Open,"Active"],["🔴","Critical",counts.Critical,"Immediate attention"],["🟠","High",counts.High,"Needs monitoring"]].map(x=><div className="stat-card" key={x[1]}><div className="stat-icon">{x[0]}</div><div><span>{x[1]}</span><strong>{x[2]}</strong><small>{x[3]}</small></div></div>)}</div><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:18}}>{["All","Critical","High","Medium","Low"].map(f=><button className="view-button" key={f} onClick={()=>setFilter(f)} style={{fontWeight:filter===f?800:500,border:filter===f?"2px solid #2563eb":"1px solid #e5e7eb"}}>{f}</button>)}<button className="route-button" onClick={refresh} style={{marginLeft:"auto"}}>🔄 Refresh</button></div></div><div className="panel" style={{marginTop:18}}>{list.map(a=><div className={`alert-row ${a.severity==="Critical"?"critical":a.severity==="Low"?"info":"warning"}`} key={a.id} style={{marginBottom:10,opacity:a.status==="Resolved"?.55:1}}><div className="alert-icon">{a.icon}</div><div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><strong>{a.type}</strong><span className={sevClass(a.severity)}>{a.severity}</span><span>{a.status}</span></div><span>{a.location}</span><small style={{display:"block",marginTop:4}}>{a.description}</small></div><div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}><small>{a.time}</small>{a.status==="Open"&&<button className="view-button" onClick={()=>resolve(a.id)}>✓ Resolve</button>}</div></div>)}</div></>; }
 
-function FieldReports({reports,setReports,alerts,setAlerts,isOnline,pendingSyncCount,syncNow,lastSync,reportForm,setReportForm,setPage}) { const submit=e=>{e.preventDefault();const id=Date.now();const r={id,...reportForm,icon:iconFor(reportForm.type),time:"Just now",status:"Open",syncStatus:isOnline?"Synced":"Pending"};setReports(x=>[r,...x]);if(["High","Critical"].includes(r.severity))setAlerts(x=>[{id:id+1,type:`Field Report: ${r.type}`,icon:r.icon,severity:r.severity,location:r.location,description:r.description,time:"Just now",status:"Open"},...x]);setReportForm(x=>({...x,description:""}));};return <><div className="panel"><div className="panel-header"><div><h2>📍 Field Intelligence</h2><p>Geo-tagged incident reporting with offline-first synchronization</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div style={{marginTop:16,padding:14,borderRadius:13,background:isOnline?"#f0fdf4":"#fff7ed",border:`1px solid ${isOnline?"#bbf7d0":"#fed7aa"}`,display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><b>{isOnline?"🟢 Online & Sync Ready":"🟠 Offline & Saving Locally"}</b><div style={{fontSize:12,marginTop:4}}>{pendingSyncCount} pending report(s) · {lastSync?`Last sync ${new Date(lastSync).toLocaleString()}`:"No sync recorded"}</div></div><button className="route-button" onClick={syncNow} disabled={!isOnline||pendingSyncCount===0}>🔄 Sync {pendingSyncCount?`(${pendingSyncCount})`:""}</button></div></div><div style={{display:"grid",gridTemplateColumns:"minmax(320px,.85fr) minmax(400px,1.4fr)",gap:18,marginTop:18}}><div className="panel"><h2>📝 New Field Report</h2><p>Submit road, weather or accessibility intelligence</p><form onSubmit={submit} style={{marginTop:16}}>{[["Incident Type","type",["Road Blockage","Landslide","Flood","Heavy Rainfall","Road Damage","Vehicle Incident","Other"]],["Severity","severity",["Low","Medium","High","Critical"]]].map(([l,k,opts])=><div className="form-group" key={k}><label>{l}</label><select value={reportForm[k]} onChange={e=>setReportForm(x=>({...x,[k]:e.target.value}))}>{opts.map(o=><option key={o}>{o}</option>)}</select></div>)}<div className="form-group"><label>Location / District</label><input required value={reportForm.location} onChange={e=>setReportForm(x=>({...x,location:e.target.value}))}/></div><div className="form-group"><label>Reporter / Field Unit</label><input required value={reportForm.reporter} onChange={e=>setReportForm(x=>({...x,reporter:e.target.value}))}/></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><div className="form-group"><label>Latitude</label><input required value={reportForm.latitude} onChange={e=>setReportForm(x=>({...x,latitude:e.target.value}))}/></div><div className="form-group"><label>Longitude</label><input required value={reportForm.longitude} onChange={e=>setReportForm(x=>({...x,longitude:e.target.value}))}/></div></div><div className="form-group"><label>Description</label><textarea required rows="5" value={reportForm.description} onChange={e=>setReportForm(x=>({...x,description:e.target.value}))} placeholder="Describe incident, road condition or accessibility issue..."/></div><button className="route-button" style={{width:"100%"}}>📡 Save Geo-Tagged Report</button></form></div><div className="panel"><div className="panel-header"><div><h2>🛰️ Report Queue</h2><p>Persisted field intelligence</p></div></div><div style={{marginTop:16}}>{reports.map(r=><div className={`alert-row ${r.severity==="Critical"?"critical":r.severity==="Low"?"info":"warning"}`} key={r.id} style={{marginBottom:10}}><div className="alert-icon">{r.icon}</div><div><div><b>{r.type}</b> <span className={sevClass(r.severity)}>{r.severity}</span></div><span>{r.location}</span><small style={{display:"block",marginTop:4}}>👤 {r.reporter} · 📍 {r.latitude}, {r.longitude}</small><small style={{display:"block",marginTop:4}}>{r.description}</small></div><div><small>{r.syncStatus==="Pending"?"⏳ Pending":"✓ Synced"}</small></div></div>)}</div></div></div></>; }
+function FieldReports({reports,setReports,alerts,setAlerts,isOnline,pendingSyncCount,syncNow,lastSync,reportForm,setReportForm,setPage}) { const submit=e=>{e.preventDefault();const id=Date.now();const latitude=Number(reportForm.latitude);const longitude=Number(reportForm.longitude);if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||latitude<-90||latitude>90||longitude<-180||longitude>180){window.alert("Please enter valid latitude and longitude.");return;}const r={id,...reportForm,latitude,longitude,icon:iconFor(reportForm.type),time:"Just now",status:"Open",syncStatus:isOnline?"Synced":"Pending"};setReports(x=>[r,...x]);if(["High","Critical"].includes(r.severity))setAlerts(x=>[{id:id+1,type:`Field Report: ${r.type}`,icon:r.icon,severity:r.severity,location:r.location,latitude:r.latitude,longitude:r.longitude,description:r.description,time:"Just now",status:"Open"},...x]);setReportForm(x=>({...x,description:""}));setPage("Live Map");};return <><div className="panel"><div className="panel-header"><div><h2>📍 Field Intelligence</h2><p>Geo-tagged incident reporting with offline-first synchronization</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div style={{marginTop:16,padding:14,borderRadius:13,background:isOnline?"#f0fdf4":"#fff7ed",border:`1px solid ${isOnline?"#bbf7d0":"#fed7aa"}`,display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><b>{isOnline?"🟢 Online & Sync Ready":"🟠 Offline & Saving Locally"}</b><div style={{fontSize:12,marginTop:4}}>{pendingSyncCount} pending report(s) · {lastSync?`Last sync ${new Date(lastSync).toLocaleString()}`:"No sync recorded"}</div></div><button className="route-button" onClick={syncNow} disabled={!isOnline||pendingSyncCount===0}>🔄 Sync {pendingSyncCount?`(${pendingSyncCount})`:""}</button></div></div><div style={{display:"grid",gridTemplateColumns:"minmax(320px,.85fr) minmax(400px,1.4fr)",gap:18,marginTop:18}}><div className="panel"><h2>📝 New Field Report</h2><p>Submit road, weather or accessibility intelligence</p><form onSubmit={submit} style={{marginTop:16}}>{[["Incident Type","type",["Road Blockage","Landslide","Flood","Heavy Rainfall","Road Damage","Vehicle Incident","Other"]],["Severity","severity",["Low","Medium","High","Critical"]]].map(([l,k,opts])=><div className="form-group" key={k}><label>{l}</label><select value={reportForm[k]} onChange={e=>setReportForm(x=>({...x,[k]:e.target.value}))}>{opts.map(o=><option key={o}>{o}</option>)}</select></div>)}<div className="form-group"><label>Location / District</label><input required value={reportForm.location} onChange={e=>setReportForm(x=>({...x,location:e.target.value}))}/></div><div className="form-group"><label>Reporter / Field Unit</label><input required value={reportForm.reporter} onChange={e=>setReportForm(x=>({...x,reporter:e.target.value}))}/></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><div className="form-group"><label>Latitude</label><input required value={reportForm.latitude} onChange={e=>setReportForm(x=>({...x,latitude:e.target.value}))}/></div><div className="form-group"><label>Longitude</label><input required value={reportForm.longitude} onChange={e=>setReportForm(x=>({...x,longitude:e.target.value}))}/></div></div><div className="form-group"><label>Description</label><textarea required rows="5" value={reportForm.description} onChange={e=>setReportForm(x=>({...x,description:e.target.value}))} placeholder="Describe incident, road condition or accessibility issue..."/></div><button className="route-button" style={{width:"100%"}}>📡 Save Geo-Tagged Report</button></form></div><div className="panel"><div className="panel-header"><div><h2>🛰️ Report Queue</h2><p>Persisted field intelligence</p></div></div><div style={{marginTop:16}}>{reports.map(r=><div className={`alert-row ${r.severity==="Critical"?"critical":r.severity==="Low"?"info":"warning"}`} key={r.id} style={{marginBottom:10}}><div className="alert-icon">{r.icon}</div><div><div><b>{r.type}</b> <span className={sevClass(r.severity)}>{r.severity}</span></div><span>{r.location}</span><small style={{display:"block",marginTop:4}}>👤 {r.reporter} · 📍 {r.latitude}, {r.longitude}</small><small style={{display:"block",marginTop:4}}>{r.description}</small></div><div><small>{r.syncStatus==="Pending"?"⏳ Pending":"✓ Synced"}</small></div></div>)}</div></div></div></>; }
 
-function Analytics({ vehicles, alerts, riskScore, setPage }) {
+function Analytics({ vehicles, alerts, reports, riskScore, riskFactors, setPage }) {
   const openAlerts = alerts.filter((a) => a.status === "Open");
+  const activeReports = (reports || []).filter((r) => String(r?.status || "Open").toLowerCase() !== "resolved");
 
   const moving = vehicles.filter(
     (v) => v.status === "Moving"
@@ -388,12 +597,12 @@ function Analytics({ vehicles, alerts, riskScore, setPage }) {
     { district: "Tawang", risk: 69 },
   ];
 
-  const riskFactors = [
-    { name: "Rainfall", value: 80 },
-    { name: "Terrain", value: 80 },
-    { name: "Landslide History", value: 70 },
-    { name: "Road Damage", value: 60 },
-    { name: "Traffic", value: 40 },
+  const riskFactorsForChart = [
+    { name: "Rainfall", value: safeNumber(riskFactors?.rainfall, 0) },
+    { name: "Terrain", value: safeNumber(riskFactors?.terrain, 0) },
+    { name: "Landslide History", value: safeNumber(riskFactors?.landslide_history, 0) },
+    { name: "Road Damage", value: safeNumber(riskFactors?.road_damage, 0) },
+    { name: "Traffic", value: safeNumber(riskFactors?.traffic, 0) },
   ];
 
   const alertTrend = [
@@ -778,7 +987,7 @@ function Analytics({ vehicles, alerts, riskScore, setPage }) {
           <p>Inputs currently influencing corridor risk</p>
 
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={riskFactors}>
+            <BarChart data={riskFactorsForChart}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
               <YAxis domain={[0, 100]} />
@@ -887,7 +1096,7 @@ function Analytics({ vehicles, alerts, riskScore, setPage }) {
               <strong>⚠️ Risk Monitoring</strong>
               <p style={{ margin: "5px 0 0" }}>
                 Average vehicle risk is {avgRisk}/100 while the
-                current corridor AI risk is {riskScore}/100.
+                current corridor AI risk is {riskScore}/100. {activeReports.length} active field report(s) and {openAlerts.length} open alert(s) are included in operational monitoring.
               </p>
             </div>
 
@@ -1027,10 +1236,32 @@ function Analytics({ vehicles, alerts, riskScore, setPage }) {
     </>
   );
 }
-function EmergencyCenter({emergencies,setEmergencies,setAlerts,setPage,language}) { const [form,setForm]=useState({type:"Road Blockage",severity:"Critical",location:"Tawang, Arunachal Pradesh",message:""}); const broadcast=e=>{e.preventDefault();const id=Date.now();const item={id,...form,icon:iconFor(form.type),time:"Just now",status:"Broadcasted"};setEmergencies(x=>[item,...x]);setAlerts(x=>[{id:id+1,type:`Emergency: ${form.type}`,icon:item.icon,severity:form.severity,location:form.location,description:form.message,time:"Just now",status:"Open"},...x]);setForm(x=>({...x,message:""}));}; const ack=id=>setEmergencies(x=>x.map(e=>e.id===id?{...e,status:"Acknowledged"}:e)); const esc=id=>setEmergencies(x=>x.map(e=>e.id===id?{...e,status:"Escalated"}:e)); const critical=emergencies.filter(e=>e.severity==="Critical"&&e.status!=="Resolved").length; return <><div className="panel"><div className="panel-header"><div><h2>🆘 Emergency Command Center</h2><p>Broadcast, acknowledge and escalate critical regional incidents</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div className="stats-grid" style={{marginTop:18}}>{[["🚨","Active Emergencies",emergencies.length,"Response queue"],["📡","Broadcasts Sent",emergencies.length,"Regional notifications"],["🔴","Critical Events",critical,"Immediate attention"]].map(x=><div className="stat-card" key={x[1]}><div className="stat-icon">{x[0]}</div><div><span>{x[1]}</span><strong>{x[2]}</strong><small>{x[3]}</small></div></div>)}</div></div><div className="panel" style={{marginTop:18}}><h2>📢 Broadcast Emergency Alert</h2><p>Publish a centralized operational alert for response teams.</p><form onSubmit={broadcast} style={{marginTop:16}}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14}}><div className="form-group"><label>Incident Type</label><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{["Landslide","Flood","Road Blockage","Heavy Rainfall","Vehicle Incident","Medical Emergency"].map(x=><option key={x}>{x}</option>)}</select></div><div className="form-group"><label>Severity</label><select value={form.severity} onChange={e=>setForm({...form,severity:e.target.value})}>{["Critical","High","Medium"].map(x=><option key={x}>{x}</option>)}</select></div><div className="form-group"><label>Location / District</label><input required value={form.location} onChange={e=>setForm({...form,location:e.target.value})}/></div></div><div className="form-group"><label>Emergency Message</label><textarea required rows="4" value={form.message} onChange={e=>setForm({...form,message:e.target.value})} placeholder="Describe the emergency and required action..."/></div><button className="route-button">📡 Broadcast Alert</button></form></div><div className="panel" style={{marginTop:18}}><div className="panel-header"><div><h2>⚡ Emergency Workflow</h2><p>Detect → Broadcast → Acknowledge → Escalate</p></div></div><div style={{display:"grid",gap:12,marginTop:16}}>{emergencies.map(e=><div key={e.id} style={{padding:16,border:"1px solid #e5e7eb",borderRadius:14,background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><b>{e.icon} {e.type} · {e.location}</b><div style={{marginTop:5,fontSize:13}}>{e.message}</div></div><span className={sevClass(e.severity)}>{e.severity}</span></div><div style={{display:"flex",justifyContent:"space-between",gap:12,marginTop:12,flexWrap:"wrap"}}><small>{e.time} · <b>{e.status}</b></small><div style={{display:"flex",gap:8}}><button className="view-button" disabled={e.status==="Acknowledged"||e.status==="Escalated"} onClick={()=>ack(e.id)}>✓ Acknowledge</button><button className="view-button" disabled={e.status==="Escalated"} onClick={()=>esc(e.id)}>⬆ Escalate</button></div></div></div>)}</div></div></>; }
+function locationToCoordinates(location) {
+  const text = String(location || "").toLowerCase();
+  const match = locations.find((l) => text.includes(l.name.toLowerCase()));
+  if (match) return match.position;
+  if (text.includes("west kameng")) return [27.264, 92.424];
+  if (text.includes("nh-13") || text.includes("tawang")) return [27.586, 91.859];
+  return null;
+}
+
+function EmergencyCenter({emergencies,setEmergencies,setAlerts,setPage,language}) { const [form,setForm]=useState({type:"Road Blockage",severity:"Critical",location:"Tawang, Arunachal Pradesh",message:""}); const broadcast=e=>{e.preventDefault();const id=Date.now();const item={id,...form,icon:iconFor(form.type),time:"Just now",status:"Broadcasted"};setEmergencies(x=>[item,...x]);const coords=locationToCoordinates(form.location);setAlerts(x=>[{id:id+1,type:`Emergency: ${form.type}`,icon:item.icon,severity:form.severity,location:form.location,latitude:coords?.[0],longitude:coords?.[1],description:form.message,time:"Just now",status:"Open"},...x]);setForm(x=>({...x,message:""}));}; const ack=id=>setEmergencies(x=>x.map(e=>e.id===id?{...e,status:"Acknowledged"}:e)); const esc=id=>setEmergencies(x=>x.map(e=>e.id===id?{...e,status:"Escalated"}:e)); const critical=emergencies.filter(e=>e.severity==="Critical"&&e.status!=="Resolved").length; return <><div className="panel"><div className="panel-header"><div><h2>🆘 Emergency Command Center</h2><p>Broadcast, acknowledge and escalate critical regional incidents</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div className="stats-grid" style={{marginTop:18}}>{[["🚨","Active Emergencies",emergencies.length,"Response queue"],["📡","Broadcasts Sent",emergencies.length,"Regional notifications"],["🔴","Critical Events",critical,"Immediate attention"]].map(x=><div className="stat-card" key={x[1]}><div className="stat-icon">{x[0]}</div><div><span>{x[1]}</span><strong>{x[2]}</strong><small>{x[3]}</small></div></div>)}</div></div><div className="panel" style={{marginTop:18}}><h2>📢 Broadcast Emergency Alert</h2><p>Publish a centralized operational alert for response teams.</p><form onSubmit={broadcast} style={{marginTop:16}}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14}}><div className="form-group"><label>Incident Type</label><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{["Landslide","Flood","Road Blockage","Heavy Rainfall","Vehicle Incident","Medical Emergency"].map(x=><option key={x}>{x}</option>)}</select></div><div className="form-group"><label>Severity</label><select value={form.severity} onChange={e=>setForm({...form,severity:e.target.value})}>{["Critical","High","Medium"].map(x=><option key={x}>{x}</option>)}</select></div><div className="form-group"><label>Location / District</label><input required value={form.location} onChange={e=>setForm({...form,location:e.target.value})}/></div></div><div className="form-group"><label>Emergency Message</label><textarea required rows="4" value={form.message} onChange={e=>setForm({...form,message:e.target.value})} placeholder="Describe the emergency and required action..."/></div><button className="route-button">📡 Broadcast Alert</button></form></div><div className="panel" style={{marginTop:18}}><div className="panel-header"><div><h2>⚡ Emergency Workflow</h2><p>Detect → Broadcast → Acknowledge → Escalate</p></div></div><div style={{display:"grid",gap:12,marginTop:16}}>{emergencies.map(e=><div key={e.id} style={{padding:16,border:"1px solid #e5e7eb",borderRadius:14,background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><b>{e.icon} {e.type} · {e.location}</b><div style={{marginTop:5,fontSize:13}}>{e.message}</div></div><span className={sevClass(e.severity)}>{e.severity}</span></div><div style={{display:"flex",justifyContent:"space-between",gap:12,marginTop:12,flexWrap:"wrap"}}><small>{e.time} · <b>{e.status}</b></small><div style={{display:"flex",gap:8}}><button className="view-button" disabled={e.status==="Acknowledged"||e.status==="Escalated"} onClick={()=>ack(e.id)}>✓ Acknowledge</button><button className="view-button" disabled={e.status==="Escalated"} onClick={()=>esc(e.id)}>⬆ Escalate</button></div></div></div>)}</div></div></>; }
 
 export default function App() {
+  const { user, logout } = useAuth();
+
   const [page,setPage]=useState("Dashboard");
+
+  const roleAccess={
+    GOVERNMENT_ADMIN:["Dashboard","Live Map","Vehicles","Risk Analysis","Route Optimizer","Alerts","Field Reports","Analytics","Emergency Center","Driver Registrations"],
+    FIELD_OFFICER:["Dashboard","Live Map","Alerts","Field Reports","Emergency Center"],
+    DRIVER:["Dashboard","Live Map","Route Optimizer","Alerts"]
+  };
+
+  useEffect(()=>{
+    const access=roleAccess[user?.role] || ["Dashboard"];
+    if(!access.includes(page)) setPage("Dashboard");
+  },[page,user?.role]);
   const [language,setLanguage]=useState("EN");
   const [isOnline,setIsOnline]=useState(()=>typeof navigator==="undefined"?true:navigator.onLine);
   const [backendOnline,setBackendOnline]=useState(false);
@@ -1043,8 +1274,21 @@ export default function App() {
   const [reportForm,setReportForm]=useState({type:"Road Blockage",severity:"High",location:"Tawang, Arunachal Pradesh",reporter:"Field Unit",latitude:"27.5860",longitude:"91.8590",description:""});
   const [riskScore,setRiskScore]=useState(0); const [riskLevel,setRiskLevel]=useState("Loading...");
   const [riskFactors,setRiskFactors]=useState({rainfall:80,road_damage:60,landslide_history:70,traffic:40,terrain:80}); const [recommendation,setRecommendation]=useState("Connecting to AI Risk Engine...");
-  const [aiLoading,setAiLoading]=useState(true); const [aiError,setAiError]=useState(""); const [riskRefreshCount,setRiskRefreshCount]=useState(0); const [selectedRoute,setSelectedRoute]=useState(null); const [alternatives,setAlternatives]=useState([]); const [routeLoading,setRouteLoading]=useState(false); const [originName,setOriginName]=useState("Guwahati"); const [destinationName,setDestinationName]=useState("Tawang"); const [origin,setOrigin]=useState(locations[0].position); const [destination,setDestination]=useState(locations[3].position); const [routeGeometry,setRouteGeometry]=useState([]); const [routeDistance,setRouteDistance]=useState(0); const [routeDuration,setRouteDuration]=useState(0); const [routeError,setRouteError]=useState(""); const [pickMode,setPickMode]=useState(null);
+  const [aiLoading,setAiLoading]=useState(true); const [aiError,setAiError]=useState(""); const [selectedRoute,setSelectedRoute]=useState(null); const [alternatives,setAlternatives]=useState([]); const [routeLoading,setRouteLoading]=useState(false); const [originName,setOriginName]=useState("Guwahati"); const [destinationName,setDestinationName]=useState("Tawang"); const [origin,setOrigin]=useState(locations[0].position); const [destination,setDestination]=useState(locations[3].position); const [routeGeometry,setRouteGeometry]=useState([]); const [routeDistance,setRouteDistance]=useState(0); const [routeDuration,setRouteDuration]=useState(0); const [routeError,setRouteError]=useState(""); const [pickMode,setPickMode]=useState(null);
   const pendingSyncCount=reports.filter(r=>r.syncStatus==="Pending").length; const alertCount=alerts.filter(a=>a.status==="Open").length;
+  useEffect(()=>{
+    setAlerts(current=>{
+      let changed=false;
+      const normalized=current.map(a=>{
+        if(Number.isFinite(Number(a?.latitude)) && Number.isFinite(Number(a?.longitude))) return a;
+        const coords=locationToCoordinates(a?.location);
+        if(!coords) return a;
+        changed=true;
+        return {...a,latitude:coords[0],longitude:coords[1]};
+      });
+      return changed ? normalized : current;
+    });
+  },[]);
 
   useEffect(()=>{
     const o=locations.find(l=>l.name===originName);
@@ -1065,140 +1309,346 @@ export default function App() {
   async function fetchRisk(){
     setAiLoading(true);
     setAiError("");
-    const refreshNo=riskRefreshCount+1;
-    setRiskRefreshCount(refreshNo);
-    const variation=[0,6,-5,9,-8,4,-3][refreshNo%7];
-    const inputs={
-      rainfall:Math.max(0,Math.min(100,80+variation)),
-      road_damage:Math.max(0,Math.min(100,60+Math.round(variation*0.6))),
-      landslide_history:Math.max(0,Math.min(100,70+Math.round(variation*0.8))),
-      traffic:Math.max(0,Math.min(100,40+Math.round(variation*0.9))),
-      terrain:80,
-    };
+    const active = reports.filter(r => String(r?.status || "Open").toLowerCase() !== "resolved");
+    const open = alerts.filter(a => String(a?.status || "Open").toLowerCase() === "open");
+    const base = { rainfall: 80, road_damage: 60, landslide_history: 70, traffic: 40, terrain: 80 };
+    const factors = { ...base };
+    active.forEach((r) => {
+      const type = String(r?.type || "").toLowerCase();
+      const sev = String(r?.severity || "Medium");
+      const weight = sev === "Critical" ? 12 : sev === "High" ? 8 : sev === "Medium" ? 5 : 2;
+      if (type.includes("landslide")) factors.landslide_history += weight;
+      if (type.includes("road")) factors.road_damage += weight;
+      if (type.includes("rain") || type.includes("flood")) factors.rainfall += weight;
+      if (type.includes("vehicle") || type.includes("blockage")) factors.traffic += weight;
+    });
+    open.forEach((a) => {
+      const type = String(a?.type || "").toLowerCase();
+      const weight = a.severity === "Critical" ? 8 : a.severity === "High" ? 5 : 3;
+      if (type.includes("landslide")) factors.landslide_history += weight;
+      if (type.includes("road") || type.includes("blockage")) factors.road_damage += weight;
+      if (type.includes("rain") || type.includes("flood")) factors.rainfall += weight;
+      if (type.includes("traffic") || type.includes("vehicle")) factors.traffic += weight;
+    });
+    Object.keys(factors).forEach(k => factors[k] = Math.max(0, Math.min(100, Math.round(factors[k]))));
     try{
-      const r=await fetch(`${API_BASE_URL}/api/risk/predict`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(inputs)});
-      if(!r.ok)throw Error();
+      const r=await fetch(`${API_BASE_URL}/api/risk/predict`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(factors)});
+      if(!r.ok) throw new Error(`Risk engine returned HTTP ${r.status}`);
       const d=await r.json();
-      setRiskScore(d.risk_score);
-      setRiskLevel(d.risk_level);
-      setRiskFactors(d.factors);
-      setRecommendation(d.recommendation);
+      setRiskScore(Number(d.risk_score));
+      setRiskLevel(d.risk_level || riskLabel(d.risk_score));
+      setRiskFactors(d.factors || factors);
+      setRecommendation(d.recommendation || "Proceed according to the current risk score and active incident intelligence.");
       setBackendOnline(true);
-      setSelectedRoute(current=>{
-        if(!current) return current;
-        const routeBase=safeNumber(current.risk_score,50);
-        const distanceEffect=Math.min(10,Math.round(safeNumber(current.distance_km,0)*0.01));
-        const refreshedRisk=Math.max(5,Math.min(95,Math.round(routeBase*0.45+d.risk_score*0.55+distanceEffect)));
-        const updated={
-          ...current,
-          risk_score:refreshedRisk,
-          road_condition:refreshedRisk>=70?"High Risk":refreshedRisk>=45?"Moderate":"Good",
-        };
-        updated.optimization_score=routeScore(updated);
-        setAlternatives(list=>list.map(route=>route.route_id===updated.route_id?updated:route));
-        setRecommendation(prev=>`${prev} Selected route risk refreshed to ${refreshedRisk}/100.`);
-        return updated;
-      });
     }catch(e){
+      const fallback = Math.round(factors.rainfall*0.30 + factors.road_damage*0.25 + factors.landslide_history*0.20 + factors.traffic*0.10 + factors.terrain*0.15);
+      const score = Math.max(0, Math.min(100, fallback));
+      setRiskScore(score);
+      setRiskLevel(riskLabel(score));
+      setRiskFactors(factors);
+      setRecommendation(score >= 80 ? "Avoid the corridor and use an alternate route." : score >= 60 ? "Consider an alternate route and monitor active incidents." : score >= 40 ? "Proceed with caution and monitor road conditions." : "Route is currently suitable for normal transportation.");
       setBackendOnline(false);
-      const fallbackScores=[69,74,63,78,61,72,66];
-      const fallbackScore=fallbackScores[refreshNo%fallbackScores.length];
-      setRiskScore(fallbackScore);
-      setRiskLevel(riskLabel(fallbackScore));
-      setRiskFactors({
-        rainfall:Math.max(0,Math.min(100,80+variation)),
-        road_damage:Math.max(0,Math.min(100,60+Math.round(variation*0.6))),
-        landslide_history:Math.max(0,Math.min(100,70+Math.round(variation*0.8))),
-        traffic:Math.max(0,Math.min(100,40+Math.round(variation*0.9))),
-        terrain:80,
-      });
-      setRecommendation("Use the AI safer route and monitor rainfall, landslide and road-condition updates.");
-      setAiError("Backend unavailable — demo fallback is active. Refresh simulation is enabled.");
-      setSelectedRoute(current=>{
-        if(!current) return current;
-        const refreshedRisk=Math.max(5,Math.min(95,Math.round(safeNumber(current.risk_score,50)*0.45+fallbackScore*0.55)));
-        const updated={...current,risk_score:refreshedRisk,road_condition:refreshedRisk>=70?"High Risk":refreshedRisk>=45?"Moderate":"Good"};
-        updated.optimization_score=routeScore(updated);
-        setAlternatives(list=>list.map(route=>route.route_id===updated.route_id?updated:route));
-        return updated;
-      });
-    }finally{setAiLoading(false)}
+      setAiError("Backend unavailable — using the same deterministic risk formula locally.");
+    } finally { setAiLoading(false); }
   }
+  function getRouteIncidentAnalysis(routeGeometryInput){
+    const points = Array.isArray(routeGeometryInput) ? routeGeometryInput : [];
+    if(points.length < 2) return { penalty: 0, blocked: false, incidents: [] };
+
+    const incidents = [...(reports || []), ...(alerts || [])].filter(
+      (x) => String(x?.status || "Open").trim().toLowerCase() === "open"
+    );
+
+    let penalty = 0;
+    let blocked = false;
+    const matched = [];
+
+    incidents.forEach((item) => {
+      const lat = Number(item?.latitude ?? item?.lat);
+      const lng = Number(item?.longitude ?? item?.lng ?? item?.lon);
+      if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+      const severity = String(item?.severity || "Medium");
+      const threshold =
+        severity === "Critical" ? 12 :
+        severity === "High" ? 8 :
+        severity === "Medium" ? 4 : 2;
+
+      let minDistanceKm = Infinity;
+      for(let i = 0; i < points.length; i++){
+        const pointLat = Number(points[i]?.[0]);
+        const pointLng = Number(points[i]?.[1]);
+        if(!Number.isFinite(pointLat) || !Number.isFinite(pointLng)) continue;
+
+        // Approximate local distance in km. Good enough for route-zone
+        // screening without adding another mapping dependency.
+        const latKm = (pointLat - lat) * 111;
+        const lngKm = (pointLng - lng) * 98;
+        const distanceKm = Math.hypot(latKm, lngKm);
+        if(distanceKm < minDistanceKm) minDistanceKm = distanceKm;
+      }
+
+      if(minDistanceKm <= threshold){
+        const basePenalty =
+          severity === "Critical" ? 100 :
+          severity === "High" ? 65 :
+          severity === "Medium" ? 35 : 15;
+
+        const proximityFactor = Math.max(
+          0,
+          Math.min(1, 1 - (minDistanceKm / threshold))
+        );
+
+        penalty += basePenalty * (0.35 + proximityFactor * 0.65);
+
+        // Critical and High incidents are treated as route exclusion
+        // zones. Medium/Low incidents increase the route cost.
+        if(severity === "Critical" || severity === "High"){
+          blocked = true;
+        }
+
+        matched.push({
+          type: item?.type || "Incident",
+          severity,
+          location: item?.location || "Monitored area",
+          distanceKm: Number(minDistanceKm.toFixed(1)),
+          thresholdKm: threshold,
+        });
+      }
+    });
+
+    return {
+      penalty: Math.min(100, Number(penalty.toFixed(2))),
+      blocked,
+      incidents: matched,
+    };
+  }
+
+  // Backward-compatible helper used by the deterministic fallback route.
+  function routeIncidentPenalty(routeGeometryInput){
+    return Math.min(35, getRouteIncidentAnalysis(routeGeometryInput).penalty * 0.35);
+  }
+
   async function findRoute(originOverride=origin,destinationOverride=destination){
     const o=originOverride; const d=destinationOverride;
     if(!o || !d) return;
     setRouteLoading(true); setRouteError("");
+
     try {
       const url=`https://router.project-osrm.org/route/v1/driving/${o[1]},${o[0]};${d[1]},${d[0]}?overview=full&geometries=geojson&alternatives=true&steps=false`;
       const response=await fetch(url);
       if(!response.ok) throw new Error(`Routing service returned HTTP ${response.status}`);
       const data=await response.json();
       if(data.code!=="Ok" || !data.routes?.length) throw new Error("No road route was returned for these endpoints.");
+
       const evaluated=data.routes.map((r,index)=>{
         const distanceKm=Math.max(0,safeNumber(r?.distance,0)/1000);
         const minutes=Math.max(0,safeNumber(r?.duration,0)/60);
-        if(distanceKm<=0 || minutes<=0 || !Array.isArray(r?.geometry?.coordinates) || r.geometry.coordinates.length<2){
+        const geometry=(r?.geometry?.coordinates || [])
+          .filter(p=>Array.isArray(p)&&p.length>=2&&Number.isFinite(Number(p[0]))&&Number.isFinite(Number(p[1])))
+          .map(([lng,lat])=>[Number(lat),Number(lng)]);
+
+        if(distanceKm<=0 || minutes<=0 || geometry.length<2){
           throw new Error("Routing service returned incomplete route data.");
         }
-        const risk=Math.max(12,Math.min(92,Math.round(20 + distanceKm*0.035 + minutes*0.018)));
-        const delay=Math.max(0,Math.round(minutes*0.08));
-        const geometry=r.geometry.coordinates
-          .filter(point=>Array.isArray(point) && point.length>=2 && Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1])))
-          .map(([lng,lat])=>[Number(lat),Number(lng)]);
-        if(geometry.length<2) throw new Error("Routing service returned invalid route geometry.");
-        return {route_id:`LIVE-${index+1}`,name:index===0?`${originName} → ${destinationName} · Live Road Route`:`Alternative Road Route ${index}`,distance_km:Number(distanceKm.toFixed(1)),estimated_minutes:Number(minutes.toFixed(0)),delay_minutes:delay,risk_score:risk,road_condition:risk>=70?"High Risk":risk>=45?"Moderate":"Good",optimization_score:routeScore({risk_score:risk,distance_km:distanceKm,delay_minutes:delay}),geometry};
+
+        const incidentAnalysis=getRouteIncidentAnalysis(geometry);
+
+        // Critical/High incidents are hard avoidance zones.
+        // Medium/Low incidents remain routeable but increase cost.
+        const routeRisk=Math.max(
+          0,
+          Math.min(
+            100,
+            Math.round(
+              safeNumber(riskScore,69)*0.55 +
+              Math.min(45, incidentAnalysis.penalty*0.45) +
+              Math.min(18, distanceKm*0.015)
+            )
+          )
+        );
+
+        const delay=Math.max(
+          0,
+          Math.round(minutes*0.08 + Math.min(40, incidentAnalysis.penalty*0.55))
+        );
+
+        return {
+          route_id:`LIVE-${index+1}`,
+          name:index===0
+            ? `${originName} → ${destinationName} · Live Road Route`
+            : `Alternative Road Route ${index}`,
+          distance_km:Number(distanceKm.toFixed(1)),
+          estimated_minutes:Number(minutes.toFixed(0)),
+          delay_minutes:delay,
+          risk_score:routeRisk,
+          road_condition:routeRisk>=70?"High Risk":routeRisk>=45?"Moderate":"Good",
+          optimization_score:routeScore({
+            risk_score:routeRisk,
+            distance_km:distanceKm,
+            delay_minutes:delay
+          }),
+          geometry,
+          routeBlocked:incidentAnalysis.blocked,
+          incidentAnalysis,
+        };
       });
-      evaluated.sort((a,b)=>a.optimization_score-b.optimization_score);
-      const best=evaluated[0];
+
+      const safeRoutes=evaluated.filter((r)=>!r.routeBlocked);
+
+      // Prefer routes that do not enter Critical/High incident zones.
+      // If every OSRM alternative is affected, keep the least-affected route
+      // and clearly tell the operator that the endpoint/corridor itself is constrained.
+      let candidateRoutes=safeRoutes.length ? safeRoutes : evaluated;
+
+      try {
+        const api=await fetch(`${API_BASE_URL}/api/routes/optimize`,{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            origin:originName,
+            destination:destinationName,
+            routes:candidateRoutes.map(({geometry,routeBlocked,incidentAnalysis,...r})=>r)
+          })
+        });
+
+        if(api.ok){
+          const result=await api.json();
+          if(Array.isArray(result?.alternatives)&&result.alternatives.length){
+            const byId=new Map(candidateRoutes.map(r=>[r.route_id,r]));
+            candidateRoutes=result.alternatives
+              .map(r=>({...byId.get(r.route_id),...r}))
+              .filter(Boolean);
+          }
+        }
+      } catch (_) {}
+
+      candidateRoutes.sort((a,b)=>{
+        const blockedA=a.routeBlocked?1:0;
+        const blockedB=b.routeBlocked?1:0;
+        if(blockedA!==blockedB) return blockedA-blockedB;
+        return a.optimization_score-b.optimization_score;
+      });
+
+      const best=candidateRoutes[0];
+      if(!best) throw new Error("No usable route was returned.");
+
+      const affectedIncidents=best.incidentAnalysis?.incidents || [];
+      const hardAffected=affectedIncidents.filter(
+        x=>x.severity==="Critical" || x.severity==="High"
+      );
+
       setSelectedRoute(best);
-      setAlternatives(evaluated);
+      setAlternatives(candidateRoutes);
       setRouteGeometry(best.geometry);
-      setRouteDistance(safeNumber(best.distance_km));
-      setRouteDuration(safeNumber(best.estimated_minutes));
-      // Keep the dashboard's 69/100 corridor AI assessment separate from route-specific risk.
-      // The selected route risk is displayed inside the route result instead of replacing the global score.
-      setRecommendation(`Safer route selected: ${best.name}. Route risk is ${best.risk_score}/100 with an estimated travel time of ${formatTravelTime(best.estimated_minutes)}.`);
-      setRouteError("");
-      // Keep the corridor AI assessment independent from route-specific risk.
-      // Dashboard switches to selectedRoute.risk_score; Risk Analysis continues to show the corridor assessment.
-      setRiskScore(safeNumber(riskScore,69));
-      setRiskLevel(riskLabel(safeNumber(riskScore,69)));
+      setRouteDistance(best.distance_km);
+      setRouteDuration(best.estimated_minutes);
+
+      if(hardAffected.length){
+        const names=hardAffected
+          .slice(0,2)
+          .map(x=>`${x.severity} ${x.type} at ${x.location}`)
+          .join("; ");
+
+        setRecommendation(
+          `⚠️ No completely clear route was available. ${names}. ` +
+          `The selected route is the least-affected available road route.`
+        );
+        setRouteError(
+          `All available road alternatives are affected by a Critical/High incident. ` +
+          `The system cannot physically bypass the affected destination/corridor, so it selected the least-affected route.`
+        );
+      } else {
+        setRecommendation(
+          `Safer route selected: ${best.name}. ` +
+          `Critical/High alert zones were excluded when an unaffected alternative was available.`
+        );
+        setRouteError("");
+      }
     } catch(e) {
-      const lat1=safeNumber(o?.[0],26.1445); const lat2=safeNumber(d?.[0],27.586);
-      const lon1=safeNumber(o?.[1],91.7362); const lon2=safeNumber(d?.[1],91.859);
-      const distanceKm=Math.max(1,Math.sqrt(Math.pow((lat2-lat1)*111,2)+Math.pow((lon2-lon1)*98,2)));
+      const lat1=safeNumber(o?.[0],26.1445), lat2=safeNumber(d?.[0],27.586);
+      const lon1=safeNumber(o?.[1],91.7362), lon2=safeNumber(d?.[1],91.859);
+      const distanceKm=Math.max(
+        1,
+        Math.sqrt(
+          Math.pow((lat2-lat1)*111,2)+
+          Math.pow((lon2-lon1)*98,2)
+        )
+      );
       const minutes=Math.max(1,Math.round(distanceKm/45*60));
-      const risk=Math.max(18,Math.min(88,Math.round(25+distanceKm*0.08)));
-      const mid=[(lat1+lat2)/2,(lon1+lon2)/2];
-      const geometry=[[lat1,lon1],[mid[0]+0.08,mid[1]-0.05],[lat2,lon2]];
-      const fallback={route_id:"DEMO-1",name:`${originName} → ${destinationName} · Demo Route`,distance_km:Number(distanceKm.toFixed(1)),estimated_minutes:minutes,delay_minutes:Math.round(minutes*0.08),risk_score:risk,road_condition:risk>=70?"High Risk":risk>=45?"Moderate":"Good",optimization_score:routeScore({risk_score:risk,distance_km:distanceKm,delay_minutes:minutes*0.08}),geometry};
+      const geometry=[
+        [lat1,lon1],
+        [(lat1+lat2)/2+0.08,(lon1+lon2)/2-0.05],
+        [lat2,lon2]
+      ];
+      const incidentAnalysis=getRouteIncidentAnalysis(geometry);
+      const risk=Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            safeNumber(riskScore,69)*0.55+
+            Math.min(45,incidentAnalysis.penalty*0.45)+
+            distanceKm*0.015
+          )
+        )
+      );
+      const delay=Math.round(
+        minutes*0.08+
+        Math.min(40,incidentAnalysis.penalty*0.55)
+      );
+      const fallback={
+        route_id:"DEMO-1",
+        name:`${originName} → ${destinationName} · Demo Route`,
+        distance_km:Number(distanceKm.toFixed(1)),
+        estimated_minutes:minutes,
+        delay_minutes:delay,
+        risk_score:risk,
+        road_condition:risk>=70?"High Risk":risk>=45?"Moderate":"Good",
+        optimization_score:routeScore({
+          risk_score:risk,
+          distance_km:distanceKm,
+          delay_minutes:delay
+        }),
+        geometry,
+        routeBlocked:incidentAnalysis.blocked,
+        incidentAnalysis,
+      };
+
       setSelectedRoute(fallback);
       setAlternatives([fallback]);
       setRouteGeometry(geometry);
-      setRouteDistance(safeNumber(fallback.distance_km));
-      setRouteDuration(safeNumber(fallback.estimated_minutes));
-      const corridorRisk = safeNumber(riskScore,69);
-      setRiskScore(corridorRisk);
-      setRiskLevel(riskLabel(corridorRisk));
-      setRecommendation(`Demo safer route selected: ${fallback.name}. Route risk is ${fallback.risk_score}/100.`);
-      setRouteError("Live road-routing service could not be reached. A deterministic fallback route is displayed so the demo does not fail.");
-    } finally { setRouteLoading(false); }
+      setRouteDistance(fallback.distance_km);
+      setRouteDuration(fallback.estimated_minutes);
+      setRecommendation(
+        incidentAnalysis.blocked
+          ? "⚠️ The fallback route intersects a Critical/High incident zone. Live routing is required to find an alternate road."
+          : `Demo route selected using the deterministic risk model. Route risk is ${fallback.risk_score}/100.`
+      );
+      setRouteError(
+        incidentAnalysis.blocked
+          ? "Live road-routing service could not be reached, and the fallback route is affected by an active Critical/High incident."
+          : "Live road-routing service could not be reached. Deterministic fallback route is displayed."
+      );
+    } finally {
+      setRouteLoading(false);
+    }
   }
-  useEffect(()=>{fetchRisk()},[]);
+  useEffect(()=>{fetchRisk()},[reports,alerts]);
   function syncNow(){if(!isOnline){setSyncMessage("Offline — reports remain safely stored on this device.");return}const count=pendingSyncCount;setReports(rs=>rs.map(r=>r.syncStatus==="Pending"?{...r,syncStatus:"Synced"}:r));const now=new Date().toISOString();setLastSync(now);try{localStorage.setItem(STORAGE.lastSync,now)}catch(_){}setSyncMessage(count?`${count} pending report(s) synchronized in demo mode.`:"All local reports are already synchronized.")}
   function resolveAlert(id){setAlerts(xs=>xs.map(a=>a.id===id?{...a,status:"Resolved"}:a))}
   function refreshAlerts(){setAlerts(xs=>xs.map(a=>a.status==="Open"?{...a,time:"Just now"}:a))}
-  const title={Dashboard:"Logistics Intelligence Dashboard","Live Map":"Live Regional Operations Map",Vehicles:"Vehicle Monitoring","Risk Analysis":"AI Risk Analysis","Route Optimizer":"AI Route Optimizer",Alerts:"Alerts & Notifications","Field Reports":"Field Intelligence Center",Analytics:"Analytics & Intelligence","Emergency Center":"Emergency Command Center"}[page];
-  const subtitle={Dashboard:"AI-powered accessibility & transportation monitoring","Live Map":"GIS visibility across roads, districts and monitored fleet",Vehicles:"Live GPS tracking & logistics fleet intelligence","Risk Analysis":"Explainable corridor risk prediction","Route Optimizer":"AI-assisted safer route selection",Alerts:"Centralized logistics and accessibility alerts","Field Reports":"Geo-tagged incident reporting with offline-first sync",Analytics:"Operational performance & logistics intelligence","Emergency Center":"Centralized emergency communication and escalation"}[page];
-  let content;
-  if(page==="Dashboard") content=<Dashboard {...{vehicles,alerts,riskScore,riskLevel,riskFactors,recommendation,backendOnline,aiLoading,aiError,fetchRisk,findRoute,routeLoading,selectedRoute,routeGeometry,origin,destination,setPage,isOnline,pendingSyncCount}}/>;
-  else if(page==="Live Map") content=<GenericMapPage {...{vehicles,riskScore,selectedRoute,setPage,routeGeometry,origin,destination}}/>;
+  const title={Dashboard:"Logistics Intelligence Dashboard","Live Map":"Live Regional Operations Map",Vehicles:"Vehicle Monitoring","Risk Analysis":"AI Risk Analysis","Route Optimizer":"AI Route Optimizer",Alerts:"Alerts & Notifications","Field Reports":"Field Intelligence Center",Analytics:"Analytics & Intelligence","Emergency Center":"Emergency Command Center","Driver Registrations":"Driver Registrations"}[page];
+  const subtitle={Dashboard:"AI-powered accessibility & transportation monitoring","Live Map":"GIS visibility across roads, districts and monitored fleet",Vehicles:"Live GPS tracking & logistics fleet intelligence","Risk Analysis":"Explainable corridor risk prediction","Route Optimizer":"AI-assisted safer route selection",Alerts:"Centralized logistics and accessibility alerts","Field Reports":"Geo-tagged incident reporting with offline-first sync",Analytics:"Operational performance & logistics intelligence","Emergency Center":"Centralized emergency communication and escalation","Driver Registrations":"Review and approve logistics driver registration requests"}[page];  let content;
+  if(page==="Dashboard") content=<Dashboard {...{vehicles,reports,alternatives,alerts,riskScore,riskLevel,riskFactors,recommendation,backendOnline,aiLoading,aiError,fetchRisk,findRoute,routeLoading,selectedRoute,routeGeometry,origin,destination,setPage,isOnline,pendingSyncCount}}/>;
+  else if(page==="Live Map") content=<GenericMapPage {...{vehicles,reports,alerts,alternatives,riskScore,selectedRoute,setPage,routeGeometry,origin,destination}}/>;
   else if(page==="Vehicles") content=<VehiclesPage {...{vehicles,setPage}}/>;
   else if(page==="Risk Analysis") content=<RiskPage {...{riskScore,riskLevel,riskFactors,recommendation,fetchRisk,aiLoading,backendOnline,setPage}}/>;
-  else if(page==="Route Optimizer") content=<RoutePage {...{vehicles,riskScore,selectedRoute,alternatives,findRoute,loading:routeLoading,setPage,originName,destinationName,setOriginName,setDestinationName,origin,destination,routeGeometry,routeDistance,routeDuration,routeError,pickMode,setPickMode,onMapPick:handleMapPick,setOrigin,setDestination,setSelectedRoute,setAlternatives,setRouteGeometry,setRouteDistance,setRouteDuration,setRouteError}}/>;
+  else if(page==="Route Optimizer") content=<RoutePage {...{vehicles,reports,alerts,riskScore,selectedRoute,alternatives,findRoute,loading:routeLoading,setPage,originName,destinationName,setOriginName,setDestinationName,origin,destination,routeGeometry,routeDistance,routeDuration,routeError,pickMode,setPickMode,onMapPick:handleMapPick,setOrigin,setDestination,setSelectedRoute,setAlternatives,setRouteGeometry,setRouteDistance,setRouteDuration,setRouteError}}/>;
   else if(page==="Alerts") content=<AlertsPage {...{alerts,resolve:resolveAlert,refresh:refreshAlerts,setPage}}/>;
   else if(page==="Field Reports") content=<FieldReports {...{reports,setReports,alerts,setAlerts,isOnline,pendingSyncCount,syncNow,lastSync,reportForm,setReportForm,setPage}}/>;
-  else if(page==="Analytics") content=<Analytics {...{vehicles,alerts,riskScore,setPage}}/>;
+  else if(page==="Analytics") content=<Analytics {...{vehicles,alerts,reports,riskScore,riskFactors,setPage}}/>;
+  else if(page==="Driver Registrations") content=<DriverRegistrations setPage={setPage}/>;
   else content=<EmergencyCenter {...{emergencies,setEmergencies,setAlerts,setPage,language}}/>;
-  return <Shell {...{page,setPage,alertCount,language,setLanguage,isOnline,backendOnline,pendingSyncCount,title,subtitle}}>{content}</Shell>;
+  return <Shell {...{page,setPage,alertCount,language,setLanguage,isOnline,backendOnline,pendingSyncCount,title,subtitle,user,logout}}>{content}</Shell>;
 }

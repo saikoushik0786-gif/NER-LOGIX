@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
 from datetime import datetime
+
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
 
 from .database import Base
 
@@ -65,6 +66,7 @@ class Incident(Base):
     incident_type = Column(String)
 
     latitude = Column(Float)
+
     longitude = Column(Float)
 
     severity = Column(String)
@@ -95,4 +97,61 @@ class Alert(Base):
     created_at = Column(
         DateTime,
         default=datetime.utcnow
+    )
+
+
+class DriverRegistration(Base):
+    """
+    Stores driver registration requests.
+
+    status values:
+    - PENDING
+    - APPROVED
+    - REJECTED
+    """
+
+    __tablename__ = "driver_registrations"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    name = Column(String, nullable=False)
+
+    email = Column(String, unique=True, nullable=False, index=True)
+
+    phone = Column(String, nullable=False)
+
+    password = Column(String, nullable=False)
+
+    license_number = Column(String, nullable=False)
+
+    vehicle_number = Column(String, nullable=False)
+
+    vehicle_type = Column(String, nullable=False)
+
+    department = Column(
+        String,
+        default="Essential Logistics"
+    )
+
+    status = Column(
+        String,
+        default="PENDING",
+        nullable=False
+    )
+
+    rejection_reason = Column(String, nullable=True)
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    reviewed_at = Column(
+        DateTime,
+        nullable=True
+    )
+
+    reviewed_by = Column(
+        String,
+        nullable=True
     )

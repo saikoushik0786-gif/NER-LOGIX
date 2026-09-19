@@ -3,3 +3,5 @@ uvicorn[standard]
 sqlalchemy
 pydantic
 python-multipart
+python-jose[cryptography]==3.5.0
+email-validator

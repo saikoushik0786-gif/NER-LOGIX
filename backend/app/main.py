@@ -6,6 +6,7 @@ from typing import List
 from .database import Base, engine
 from .services.risk_engine import calculate_risk
 from .services.route_optimizer import optimize_routes
+from .auth import router as auth_router
 
 
 # =========================================================
@@ -43,6 +44,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# =========================================================
+# AUTHENTICATION ROUTER
+# =========================================================
+
+app.include_router(auth_router.router)
 
 
 # =========================================================
@@ -185,6 +193,7 @@ def root():
         "status": "running",
         "version": "1.0.0",
         "modules": [
+            "Authentication",
             "AI Risk Prediction",
             "Route Optimization",
         ],
