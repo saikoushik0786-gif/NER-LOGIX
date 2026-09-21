@@ -266,6 +266,8 @@ export default function MapView({
   destination = null,
   pickMode = null,
   onMapPick = null,
+  emergencyMode = false,
+  onEmergencyModeToggle = null,
 }) {
   const [baseLayer, setBaseLayer] = useState("osm");
   const [showRisks, setShowRisks] = useState(true);
@@ -606,7 +608,31 @@ export default function MapView({
           </Polyline>
         )}
 
-        {showSaferRoute && routePositions.length >= 2 && (
+        {emergencyMode && routePositions.length >= 2 && (
+          <Polyline
+            positions={routePositions}
+            pathOptions={{
+              color: "#0f766e",
+              weight: 10,
+              opacity: 0.98,
+              dashArray: "18 8",
+              lineCap: "round",
+              lineJoin: "round",
+            }}
+          >
+            <Popup>
+              <strong>🚨 Emergency-Accessible Route</strong>
+              <br />
+              {selectedRoute?.name || "Emergency route"}
+              <br />
+              Risk: {safeNumber(selectedRoute?.risk_score, "—")}/100
+              <br />
+              <small>Prioritized for essential-supply movement and avoidance of Critical/High incident zones when possible.</small>
+            </Popup>
+          </Polyline>
+        )}
+
+        {showSaferRoute && !emergencyMode && routePositions.length >= 2 && (
           <>
             <Polyline
               positions={routePositions}
@@ -731,6 +757,33 @@ export default function MapView({
           🗺️ Map Controls
         </div>
 
+        <button
+          type="button"
+          onClick={onEmergencyModeToggle}
+          disabled={!onEmergencyModeToggle}
+          style={{
+            width: "100%",
+            border: emergencyMode ? "2px solid #0f766e" : "1px solid #fecaca",
+            background: emergencyMode ? "#ecfdf5" : "#fff7ed",
+            color: emergencyMode ? "#065f46" : "#b91c1c",
+            borderRadius: 9,
+            padding: "9px 8px",
+            fontSize: 11,
+            fontWeight: 800,
+            cursor: onEmergencyModeToggle ? "pointer" : "default",
+            marginBottom: 8,
+          }}
+        >
+          {emergencyMode ? "🚨 Emergency Mode: ON" : "🚨 Emergency Mode"}
+        </button>
+
+        {emergencyMode && (
+          <div style={{ fontSize: 10, lineHeight: 1.45, padding: "7px 8px", borderRadius: 8, background: "#ecfdf5", color: "#065f46", marginBottom: 8 }}>
+            <b>Emergency routing active</b><br />
+            Accessible routes first · high-risk roads avoided · essential supplies prioritized
+          </div>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
           {[
             ["osm", "OpenStreetMap"],
@@ -802,7 +855,7 @@ export default function MapView({
         <span style={{ color: "#16a34a" }}>● Safe</span>{" "}
         <span style={{ color: "#f59e0b" }}>● Medium</span>{" "}
         <span style={{ color: "#dc2626" }}>● High/Critical</span>{" "}
-        <span>· 🚚 Fleet · 🚨 Alerts · 🧠 Green route = AI selected</span>
+        <span>· 🚚 Fleet · 🚨 Alerts · 🧠 Green route = AI selected{emergencyMode ? " · 🚨 Teal route = Emergency-accessible" : ""}</span>
       </div>
     </div>
   );

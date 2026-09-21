@@ -160,7 +160,7 @@ function MapPickHandler({enabled, onPick}) {
   return null;
 }
 
-function Dashboard({vehicles,reports,alerts,alternatives,riskScore,riskLevel,riskFactors,recommendation,backendOnline,aiLoading,aiError,fetchRisk,findRoute,routeLoading,selectedRoute,routeGeometry,origin,destination,setPage,isOnline,pendingSyncCount}) {
+function Dashboard({vehicles,reports,alerts,alternatives,riskScore,riskLevel,riskFactors,recommendation,backendOnline,aiLoading,aiError,fetchRisk,findRoute,routeLoading,selectedRoute,routeGeometry,origin,destination,setPage,isOnline,pendingSyncCount,emergencyMode,onEmergencyModeToggle}) {
   const active=alerts.filter(a=>a.status==="Open").length; const moving=vehicles.filter(v=>v.status==="Moving").length;
   const displayRiskScore=safeNumber(riskScore,69);
   const displayRiskLevel=riskLabel(displayRiskScore);
@@ -171,7 +171,7 @@ function Dashboard({vehicles,reports,alerts,alternatives,riskScore,riskLevel,ris
       {[ ["🚚","Active Vehicles",vehicles.length,`${moving} moving`],["🛣️","Accessible Roads","87%","Across monitored districts"],["⚠️","High Risk Corridors","07","Requires attention"],["🚨","Active Alerts",active,"Real-time response queue"],["⛽","Average Fuel",`${avgFuel}%`,"Fleet average"],["🧠","AI Risk",`${displayRiskScore}/100`,displayRiskLevel] ].map(([i,l,v,s],idx)=><div className="stat-card" key={l}><div className="stat-icon">{i}</div><div><span>{l}</span><strong className={idx===3||(idx===5&&displayRiskScore>=60)?"danger":""}>{v}</strong><small>{s}</small></div></div>)}
     </section>
     <section className="content-grid">
-      <div className="panel map-panel"><div className="panel-header"><div><h2>🗺️ Regional Operations Map</h2><p>Live GIS view · corridors · fleet · risk zones</p></div><span className="live-badge">● LIVE GIS</span></div><MapView vehicles={vehicles} reports={reports} alerts={alerts} alternatives={alternatives} riskScore={riskScore} showSaferRoute={routeGeometry.length >= 2} selectedRoute={selectedRoute} routeGeometry={routeGeometry} origin={origin} destination={destination}/><div className="map-legend"><span>🟢 Safe</span><span>🟠 Moderate</span><span>🔴 High Risk</span><span>🟢┄ AI Safer Route · green waypoints</span></div></div>
+      <div className="panel map-panel"><div className="panel-header"><div><h2>🗺️ Regional Operations Map</h2><p>Live GIS view · corridors · fleet · risk zones</p></div><span className="live-badge">● LIVE GIS</span></div><MapView vehicles={vehicles} reports={reports} alerts={alerts} alternatives={alternatives} riskScore={riskScore} showSaferRoute={routeGeometry.length >= 2} selectedRoute={selectedRoute} routeGeometry={routeGeometry} origin={origin} destination={destination} emergencyMode={emergencyMode} onEmergencyModeToggle={onEmergencyModeToggle}/><div className="map-legend"><span>🟢 Safe</span><span>🟠 Moderate</span><span>🔴 High Risk</span><span>🟢┄ AI Safer Route · green waypoints</span></div></div>
       <div className="panel risk-panel"><div className="panel-header"><div><h2>🤖 AI Risk Command</h2><p>NH-13 · Tawang corridor</p></div>{backendOnline&&<span className="live-badge">● AI LIVE</span>}</div>
         {aiError&&<div className="route-message">⚠️ {aiError}</div>}
         <div className="risk-score"><div className="score-circle"><strong>{aiLoading?"--":displayRiskScore}</strong><span>/100</span></div><div><h2 className={riskClass(displayRiskScore)}>{aiLoading?"Analyzing...":`${displayRiskLevel} Risk`}</h2><p>Current corridor assessment · synchronized with Analytics</p></div></div>
@@ -189,7 +189,7 @@ function Dashboard({vehicles,reports,alerts,alternatives,riskScore,riskLevel,ris
   </>;
 }
 
-function GenericMapPage({vehicles,reports,alerts,alternatives,riskScore,selectedRoute,setPage,routeGeometry,origin,destination}) { return <div className="panel"><div className="panel-header"><div><h2>🗺️ Live Regional Map</h2><p>GIS operations view with vehicles, risk corridors and AI alternate routing</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><MapView vehicles={vehicles} reports={reports} alerts={alerts} alternatives={alternatives} riskScore={riskScore} showSaferRoute={routeGeometry.length >= 2} selectedRoute={selectedRoute} routeGeometry={routeGeometry} origin={origin} destination={destination}/><div className="route-message" style={{marginTop:14}}><b>Map intelligence</b><p>Red corridor indicates elevated risk. Green dashed corridor represents the AI-selected route. Use Route Optimizer to choose any monitored location or click directly on the map to set endpoints.</p></div></div>; }
+function GenericMapPage({vehicles,reports,alerts,alternatives,riskScore,selectedRoute,setPage,routeGeometry,origin,destination,emergencyMode,onEmergencyModeToggle}) { return <div className="panel"><div className="panel-header"><div><h2>🗺️ Live Regional Map</h2><p>GIS operations view with vehicles, risk corridors and AI alternate routing</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><MapView vehicles={vehicles} reports={reports} alerts={alerts} alternatives={alternatives} riskScore={riskScore} showSaferRoute={routeGeometry.length >= 2} selectedRoute={selectedRoute} routeGeometry={routeGeometry} origin={origin} destination={destination} emergencyMode={emergencyMode} onEmergencyModeToggle={onEmergencyModeToggle}/><div className="route-message" style={{marginTop:14}}><b>{emergencyMode?"🚨 Emergency route intelligence":"Map intelligence"}</b><p>{emergencyMode?"Emergency mode prioritizes accessible roads, avoids Critical/High incident zones when an unaffected alternative exists, and prioritizes lower risk for essential-supply movement.":"Red corridor indicates elevated risk. Green dashed corridor represents the AI-selected route. Use Route Optimizer to choose any monitored location or click directly on the map to set endpoints."}</p></div></div>; }
 
 function VehiclesPage({vehicles,setPage}) { return <div className="panel"><div className="panel-header"><div><h2>🚚 Fleet & GPS Command</h2><p>Live logistics vehicle telemetry across monitored corridors</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginTop:18}}>{vehicles.map(v=><div key={v.id} style={{border:"1px solid #e5e7eb",borderRadius:16,padding:18,background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><h3 style={{margin:"0 0 4px"}}>🚚 {v.id}</h3><small>{v.driver}</small></div><span className="live-badge">● LIVE</span></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:18}}>{[["Cargo",`${v.cargoIcon} ${v.cargo}`],["Status",v.status],["Speed",`${v.speed} km/h`],["Fuel",`${v.fuel}%`],["ETA",formatTravelTime(v.etaMinutes)],["Risk",`${v.riskScore}/100 · ${riskLabel(v.riskScore)}`]].map(([a,b])=><div key={a}><small>{a}</small><div className={a==="Risk"?riskClass(v.riskScore):""} style={{fontWeight:600}}>{b}</div></div>)}</div><div style={{marginTop:16}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12}}><span>Delivery progress</span><b>{progress(v)}%</b></div><div style={{height:8,background:"#e5e7eb",borderRadius:10,marginTop:6,overflow:"hidden"}}><div style={{height:"100%",width:`${progress(v)}%`,background:"#2563eb"}}/></div></div><div style={{marginTop:14,fontSize:12,color:"#6b7280"}}>📍 {v.position[0].toFixed(4)}, {v.position[1].toFixed(4)}</div></div>)}</div></div>; }
 
@@ -1066,7 +1066,7 @@ export default function App() {
   const [reportForm,setReportForm]=useState({type:"Road Blockage",severity:"High",location:"Tawang, Arunachal Pradesh",reporter:"Field Unit",latitude:"27.5860",longitude:"91.8590",description:""});
   const [riskScore,setRiskScore]=useState(0); const [riskLevel,setRiskLevel]=useState("Loading...");
   const [riskFactors,setRiskFactors]=useState({rainfall:80,road_damage:60,landslide_history:70,traffic:40,terrain:80}); const [recommendation,setRecommendation]=useState("Connecting to AI Risk Engine...");
-  const [aiLoading,setAiLoading]=useState(true); const [aiError,setAiError]=useState(""); const [selectedRoute,setSelectedRoute]=useState(null); const [alternatives,setAlternatives]=useState([]); const [routeLoading,setRouteLoading]=useState(false); const [originName,setOriginName]=useState("Guwahati"); const [destinationName,setDestinationName]=useState("Tawang"); const [origin,setOrigin]=useState(locations[0].position); const [destination,setDestination]=useState(locations[3].position); const [routeGeometry,setRouteGeometry]=useState([]); const [routeDistance,setRouteDistance]=useState(0); const [routeDuration,setRouteDuration]=useState(0); const [routeError,setRouteError]=useState(""); const [pickMode,setPickMode]=useState(null);
+  const [aiLoading,setAiLoading]=useState(true); const [aiError,setAiError]=useState(""); const [selectedRoute,setSelectedRoute]=useState(null); const [alternatives,setAlternatives]=useState([]); const [routeLoading,setRouteLoading]=useState(false); const [originName,setOriginName]=useState("Guwahati"); const [destinationName,setDestinationName]=useState("Tawang"); const [origin,setOrigin]=useState(locations[0].position); const [destination,setDestination]=useState(locations[3].position); const [routeGeometry,setRouteGeometry]=useState([]); const [routeDistance,setRouteDistance]=useState(0); const [routeDuration,setRouteDuration]=useState(0); const [routeError,setRouteError]=useState(""); const [pickMode,setPickMode]=useState(null); const [emergencyMode,setEmergencyMode]=useState(false);
   const pendingSyncCount=reports.filter(r=>r.syncStatus==="Pending").length; const alertCount=alerts.filter(a=>a.status==="Open").length;
   useEffect(()=>{
     setAlerts(current=>{
@@ -1221,7 +1221,8 @@ export default function App() {
     return Math.min(35, getRouteIncidentAnalysis(routeGeometryInput).penalty * 0.35);
   }
 
-  async function findRoute(originOverride=origin,destinationOverride=destination){
+  async function findRoute(originOverride=origin,destinationOverride=destination,emergencyOverride=null){
+    const emergencyRouting=emergencyOverride===null?emergencyMode:emergencyOverride;
     const o=originOverride; const d=destinationOverride;
     if(!o || !d) return;
     setRouteLoading(true); setRouteError("");
@@ -1319,6 +1320,13 @@ export default function App() {
         const blockedA=a.routeBlocked?1:0;
         const blockedB=b.routeBlocked?1:0;
         if(blockedA!==blockedB) return blockedA-blockedB;
+        if(emergencyRouting){
+          const riskDiff=safeNumber(a.risk_score,100)-safeNumber(b.risk_score,100);
+          if(riskDiff!==0) return riskDiff;
+          const delayDiff=safeNumber(a.delay_minutes,999)-safeNumber(b.delay_minutes,999);
+          if(delayDiff!==0) return delayDiff;
+          return safeNumber(a.distance_km,9999)-safeNumber(b.distance_km,9999);
+        }
         return a.optimization_score-b.optimization_score;
       });
 
@@ -1352,8 +1360,9 @@ export default function App() {
         );
       } else {
         setRecommendation(
-          `Safer route selected: ${best.name}. ` +
-          `Critical/High alert zones were excluded when an unaffected alternative was available.`
+          emergencyMode
+            ? `🚨 Emergency route selected: ${best.name}. Accessible roads were prioritized, Critical/High incident zones were avoided when possible, and lower risk was prioritized for essential-supply movement.`
+            : `Safer route selected: ${best.name}. Critical/High alert zones were excluded when an unaffected alternative was available.`
         );
         setRouteError("");
       }
@@ -1430,10 +1439,15 @@ export default function App() {
   function syncNow(){if(!isOnline){setSyncMessage("Offline — reports remain safely stored on this device.");return}const count=pendingSyncCount;setReports(rs=>rs.map(r=>r.syncStatus==="Pending"?{...r,syncStatus:"Synced"}:r));const now=new Date().toISOString();setLastSync(now);try{localStorage.setItem(STORAGE.lastSync,now)}catch(_){}setSyncMessage(count?`${count} pending report(s) synchronized in demo mode.`:"All local reports are already synchronized.")}
   function resolveAlert(id){setAlerts(xs=>xs.map(a=>a.id===id?{...a,status:"Resolved"}:a))}
   function refreshAlerts(){setAlerts(xs=>xs.map(a=>a.status==="Open"?{...a,time:"Just now"}:a))}
+  function handleEmergencyModeToggle(){
+    const next=!emergencyMode;
+    setEmergencyMode(next);
+    if(next && origin && destination) setTimeout(()=>findRoute(origin,destination,true),0);
+  }
   const title={Dashboard:"Logistics Intelligence Dashboard","Live Map":"Live Regional Operations Map",Vehicles:"Vehicle Monitoring","Risk Analysis":"AI Risk Analysis","Route Optimizer":"AI Route Optimizer",Alerts:"Alerts & Notifications","Field Reports":"Field Intelligence Center",Analytics:"Analytics & Intelligence","Emergency Center":"Emergency Command Center","Driver Registrations":"Driver Registrations"}[page];
   const subtitle={Dashboard:"AI-powered accessibility & transportation monitoring","Live Map":"GIS visibility across roads, districts and monitored fleet",Vehicles:"Live GPS tracking & logistics fleet intelligence","Risk Analysis":"Explainable corridor risk prediction","Route Optimizer":"AI-assisted safer route selection",Alerts:"Centralized logistics and accessibility alerts","Field Reports":"Geo-tagged incident reporting with offline-first sync",Analytics:"Operational performance & logistics intelligence","Emergency Center":"Centralized emergency communication and escalation","Driver Registrations":"Review and approve logistics driver registration requests"}[page];  let content;
-  if(page==="Dashboard") content=<Dashboard {...{vehicles,reports,alternatives,alerts,riskScore,riskLevel,riskFactors,recommendation,backendOnline,aiLoading,aiError,fetchRisk,findRoute,routeLoading,selectedRoute,routeGeometry,origin,destination,setPage,isOnline,pendingSyncCount}}/>;
-  else if(page==="Live Map") content=<GenericMapPage {...{vehicles,reports,alerts,alternatives,riskScore,selectedRoute,setPage,routeGeometry,origin,destination}}/>;
+  if(page==="Dashboard") content=<Dashboard {...{vehicles,reports,alternatives,alerts,riskScore,riskLevel,riskFactors,recommendation,backendOnline,aiLoading,aiError,fetchRisk,findRoute,routeLoading,selectedRoute,routeGeometry,origin,destination,setPage,isOnline,pendingSyncCount,emergencyMode,onEmergencyModeToggle:handleEmergencyModeToggle}}/>;
+  else if(page==="Live Map") content=<GenericMapPage {...{vehicles,reports,alerts,alternatives,riskScore,selectedRoute,setPage,routeGeometry,origin,destination,emergencyMode,onEmergencyModeToggle:handleEmergencyModeToggle}}/>;
   else if(page==="Vehicles") content=<VehiclesPage {...{vehicles,setPage}}/>;
   else if(page==="Risk Analysis") content=<RiskPage {...{riskScore,riskLevel,riskFactors,recommendation,fetchRisk,aiLoading,backendOnline,setPage}}/>;
   else if(page==="Route Optimizer") content=<RoutePage {...{vehicles,reports,alerts,riskScore,selectedRoute,alternatives,findRoute,loading:routeLoading,setPage,originName,destinationName,setOriginName,setDestinationName,origin,destination,routeGeometry,routeDistance,routeDuration,routeError,pickMode,setPickMode,onMapPick:handleMapPick,setOrigin,setDestination,setSelectedRoute,setAlternatives,setRouteGeometry,setRouteDistance,setRouteDuration,setRouteError}}/>;
