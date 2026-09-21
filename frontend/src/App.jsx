@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./auth/AuthContext";
 import DriverRegistrations from "./pages/DriverRegistrations.jsx";
 import MapView from "./MapView.jsx";
@@ -115,7 +115,12 @@ function Header({ title, subtitle, language, setLanguage, alertCount, setPage, i
     <div><div className="region-title">NORTH EASTERN REGION · NER-LOGIX</div><h1>{title}</h1><p>{subtitle}</p></div>
     <div className="header-actions" style={{gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
       <span style={{padding:"7px 11px",borderRadius:999,background:isOnline?"#ecfdf5":"#fff7ed",border:`1px solid ${isOnline?"#bbf7d0":"#fed7aa"}`,fontSize:12,fontWeight:700}}>{isOnline?"● ONLINE":"● OFFLINE"}{pendingSyncCount>0?` · ${pendingSyncCount} pending`:""}</span>
-      <button className="language-button" onClick={()=>setLanguage(language==="EN"?"HI":language==="HI"?"AS":"EN")}>🌐 {language}</button>
+      <button
+        className="language-button"
+        title="Change language"
+        aria-label="Change language"
+        onClick={() => setLanguage(language==="EN" ? "HI" : language==="HI" ? "AS" : "EN")}
+      >🌐 {language}</button>
       <button className="notification-button" onClick={()=>setPage("Alerts")}>🔔 {alertCount}</button>
       <div className="profile" title={user?.role || "User"}>{(user?.name || user?.username || "U").slice(0,2).toUpperCase()}</div>
       <button className="view-button" onClick={logout} style={{fontWeight:700}}>🚪 Logout</button>
@@ -195,7 +200,311 @@ function VehiclesPage({vehicles,setPage}) { return <div className="panel"><div c
 
 function RiskPage({riskScore,riskLevel,riskFactors,recommendation,fetchRisk,aiLoading,backendOnline,setPage}) { return <div className="panel"><div className="panel-header"><div><h2>⚠️ AI Risk Analysis</h2><p>Explainable corridor risk assessment from the FastAPI risk engine</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div style={{display:"grid",gridTemplateColumns:"minmax(250px,.7fr) minmax(320px,1.3fr)",gap:20,marginTop:20}}><div style={{display:"grid",placeItems:"center",padding:20}}><div className="score-circle" style={{width:190,height:190}}><strong>{aiLoading?"--":riskScore}</strong><span>/100</span></div><h2 className={riskClass(riskScore)} style={{marginTop:15}}>{riskLevel} Risk</h2><span>{backendOnline?"● Connected to FastAPI":"● Backend unavailable"}</span></div><div><h3>Risk factor breakdown</h3>{Object.entries(riskFactors).map(([k,v])=><div key={k} style={{margin:"18px 0"}}><div style={{display:"flex",justifyContent:"space-between"}}><b>{k.replaceAll("_"," ")}</b><b>{v}/100</b></div><div style={{height:11,background:"#e5e7eb",borderRadius:8,marginTop:6}}><div style={{height:"100%",width:`${v}%`,background:v>=70?"#ef4444":v>=40?"#f59e0b":"#22c55e",borderRadius:8}}/></div></div>)}<div className="route-message"><b>🤖 Recommendation</b><p>{recommendation}</p></div><button className="route-button" onClick={fetchRisk} disabled={aiLoading}>{aiLoading?"Analyzing...":"Run Fresh Prediction"}</button></div></div></div>; }
 
-function RoutePage({vehicles,reports,alerts,riskScore,selectedRoute,alternatives,findRoute,loading,setPage,originName,destinationName,setOriginName,setDestinationName,origin,destination,routeGeometry,routeDistance,routeDuration,routeError,pickMode,setPickMode,onMapPick,setOrigin,setDestination,setSelectedRoute,setAlternatives,setRouteGeometry,setRouteDistance,setRouteDuration,setRouteError}) {
+function VoiceRouteAssistant({ locations, onRoute, language = "EN", setLanguage }) {
+  const [listening, setListening] = useState(false);
+  const [heard, setHeard] = useState("");
+  const [message, setMessage] = useState("");
+  const recognitionRef = useRef(null);
+  const activeRef = useRef(false);
+  const completedRef = useRef(false);
+  const restartTimerRef = useRef(null);
+  const restartCountRef = useRef(0);
+
+  const speechLocale = language === "HI" ? "hi-IN" : language === "AS" ? "as-IN" : "en-IN";
+
+  const aliases = {
+    Guwahati: ["guwahati", "guhati", "gohati", "guahati", "guwahati", "गुवाहाटी", "গুৱাহাটী"],
+    Shillong: ["shillong", "shilong", "sillong", "silong", "शिलांग", "শিলং"],
+    Itanagar: ["itanagar", "itanaghar", "itanager", "ईटानगर", "ইটানগৰ"],
+    Tawang: ["tawang", "tawng", "tawangh", "तवांग", "তৱাং"],
+    Bomdila: ["bomdila", "bomdilla", "bomdila", "बोमडिला", "বোমডিলা"],
+  };
+
+  function normalize(value) {
+    return String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function levenshtein(a, b) {
+    if (a === b) return 0;
+    if (!a) return b.length;
+    if (!b) return a.length;
+    const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i += 1) {
+      let left = i;
+      for (let j = 1; j <= b.length; j += 1) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        const next = Math.min(prev[j] + 1, left + 1, prev[j - 1] + cost);
+        prev[j - 1] = left;
+        left = next;
+      }
+      prev[b.length] = left;
+    }
+    return prev[b.length];
+  }
+
+  function similarity(a, b) {
+    const x = normalize(a);
+    const y = normalize(b);
+    if (!x || !y) return 0;
+    if (x === y) return 1;
+    if (x.includes(y) || y.includes(x)) return 0.92;
+    const distance = levenshtein(x, y);
+    return 1 - distance / Math.max(x.length, y.length);
+  }
+
+  function locationAliases(location) {
+    const name = location?.name || "";
+    return Array.from(new Set([name, ...(aliases[name] || [])]));
+  }
+
+  function scoreLocation(text, location) {
+    const cleaned = normalize(text);
+    if (!cleaned) return { score: 0, index: 9999 };
+
+    const aliasesForLocation = locationAliases(location);
+    let best = { score: 0, index: 9999 };
+    const words = cleaned.split(/\s+/).filter(Boolean);
+
+    for (const alias of aliasesForLocation) {
+      const a = normalize(alias);
+      if (!a) continue;
+      const directIndex = cleaned.indexOf(a);
+      if (directIndex >= 0) {
+        best = { score: 1, index: directIndex };
+        continue;
+      }
+
+      const aliasWords = a.split(/\s+/);
+      const size = aliasWords.length;
+      for (let i = 0; i < words.length; i += 1) {
+        for (let span = Math.max(1, size - 1); span <= Math.min(3, size + 1, words.length - i); span += 1) {
+          const candidate = words.slice(i, i + span).join(" ");
+          const score = similarity(candidate, a);
+          if (score > best.score) {
+            best = { score, index: cleaned.indexOf(candidate) };
+          }
+        }
+      }
+    }
+    return best;
+  }
+
+  function findLocation(text, usedNames = []) {
+    const ranked = locations
+      .map((location) => ({ location, ...scoreLocation(text, location) }))
+      .filter((x) => !usedNames.includes(x.location.name))
+      .sort((a, b) => b.score - a.score);
+
+    // Accept slightly imperfect speech such as "gohati", "shilong" or "tawng".
+    return ranked[0] && ranked[0].score >= 0.58 ? ranked[0].location : null;
+  }
+
+  function parseRoute(text) {
+    const cleaned = normalize(text);
+    if (!cleaned) return null;
+
+    // First try the normal route grammar. It works with English, Hindi/Assamese
+    // connectors and imperfect phrases because the locations themselves are fuzzy matched.
+    const connectorMatch = cleaned.match(
+      /(?:from|between|route|take me|show me|go|travel|start|starting|leaving|से|পৰা|থেকে)?\s*(.*?)\s*(?:to|towards|via|and|से|तक|লৈ|থেকে|পৰা|and then|then)\s*(.*)/i
+    );
+
+    if (connectorMatch) {
+      const from = findLocation(connectorMatch[1]);
+      const to = findLocation(connectorMatch[2], from ? [from.name] : []);
+      if (from && to && from.name !== to.name) return { from, to };
+    }
+
+    // Fallback: do not require the user to say "from" or "to" at all.
+    // Example: "gohati tawng", "Guwahati... Tawang please", etc.
+    const ranked = locations
+      .map((location) => ({ location, ...scoreLocation(cleaned, location) }))
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.index - b.index;
+      });
+
+    const first = ranked.find((x) => x.score >= 0.58);
+    const second = ranked.find(
+      (x) => x.location.name !== first?.location.name && x.score >= 0.58
+    );
+
+    if (first && second) {
+      const ordered = [first, second].sort((a, b) => a.index - b.index);
+      return { from: ordered[0].location, to: ordered[1].location };
+    }
+
+    return null;
+  }
+
+  function stopListening(finalMessage = "") {
+    activeRef.current = false;
+    completedRef.current = true;
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+    try { recognitionRef.current?.stop(); } catch (_) {}
+    recognitionRef.current = null;
+    setListening(false);
+    if (finalMessage) setMessage(finalMessage);
+  }
+
+  function startListening() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setMessage("Voice recognition is not supported in this browser. Please use Google Chrome.");
+      return;
+    }
+
+    try { recognitionRef.current?.abort(); } catch (_) {}
+    if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+
+    setHeard("");
+    setMessage(
+      language === "HI"
+        ? "🎙️ बोलिए: गुवाहाटी से तवांग"
+        : language === "AS"
+          ? "🎙️ কওক: গুৱাহাটীৰ পৰা তৱাংলৈ"
+          : "🎙️ Say your route — for example: Guwahati to Tawang"
+    );
+    setListening(true);
+    activeRef.current = true;
+    completedRef.current = false;
+    restartCountRef.current = 0;
+
+    const createRecognition = () => {
+      if (!activeRef.current) return;
+      const recognition = new SpeechRecognition();
+      recognition.lang = speechLocale;
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 5;
+
+      recognition.onstart = () => {
+        setListening(true);
+        setMessage(
+          language === "HI"
+            ? "🎙️ सुन रहा हूँ... अपनी यात्रा बोलिए"
+            : language === "AS"
+              ? "🎙️ শুনি আছোঁ... আপোনাৰ যাত্ৰাটো কওক"
+              : "🎙️ Listening... speak naturally, you do not need perfect words."
+        );
+      };
+
+      recognition.onresult = (event) => {
+        const alternatives = [];
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          const result = event.results[i];
+          for (let j = 0; j < Math.min(result.length || 1, 5); j += 1) {
+            const transcript = result?.[j]?.transcript || "";
+            if (transcript.trim()) alternatives.push(transcript.trim());
+          }
+        }
+
+        const bestHeard = alternatives[0] || "";
+        if (bestHeard) setHeard(bestHeard);
+
+        const parsedCandidates = alternatives
+          .map((candidate) => ({ candidate, parsed: parseRoute(candidate) }))
+          .filter((x) => x.parsed);
+
+        if (parsedCandidates.length) {
+          const parsed = parsedCandidates[0].parsed;
+          completedRef.current = true;
+          activeRef.current = false;
+          setHeard(parsedCandidates[0].candidate);
+          setMessage(`✓ Route understood: ${parsed.from.name} → ${parsed.to.name}`);
+          try { recognition.stop(); } catch (_) {}
+          recognitionRef.current = null;
+          setListening(false);
+          onRoute(parsed.from, parsed.to);
+          return;
+        }
+
+        if (bestHeard) {
+          setMessage(
+            language === "HI"
+              ? "समझने की कोशिश कर रहा हूँ... जैसे बोलें: गुवाहाटी से तवांग"
+              : language === "AS"
+                ? "বুজিবলৈ চেষ্টা কৰি আছোঁ... যেনে: গুৱাহাটী পৰা তৱাং"
+                : "I’m understanding your words... you can speak casually, for example: go from Guwahati to Tawang."
+          );
+        }
+      };
+
+      recognition.onerror = (event) => {
+        const error = event?.error || "";
+        if (error === "not-allowed" || error === "service-not-allowed") {
+          stopListening("Microphone permission is blocked. Allow microphone access in Chrome and try again.");
+          return;
+        }
+        if (error === "audio-capture") {
+          stopListening("I cannot access the microphone. Check Windows microphone permissions and try again.");
+          return;
+        }
+        if (error === "network") {
+          stopListening("Chrome's speech service is unavailable right now. Your internet may still be working. Please try the mic again.");
+          return;
+        }
+        if (activeRef.current && !completedRef.current && ["no-speech", "aborted"].includes(error) && restartCountRef.current < 3) {
+          restartCountRef.current += 1;
+          restartTimerRef.current = setTimeout(() => {
+            if (activeRef.current) createRecognition();
+          }, 250);
+          return;
+        }
+      };
+
+      recognition.onend = () => {
+        if (activeRef.current && !completedRef.current && restartCountRef.current < 3) {
+          restartCountRef.current += 1;
+          restartTimerRef.current = setTimeout(() => {
+            if (activeRef.current) createRecognition();
+          }, 250);
+        } else if (!activeRef.current) {
+          setListening(false);
+        }
+      };
+
+      recognitionRef.current = recognition;
+      try { recognition.start(); } catch (_) {
+        if (activeRef.current) setTimeout(() => createRecognition(), 300);
+      }
+    };
+
+    createRecognition();
+  }
+
+  useEffect(() => () => {
+    activeRef.current = false;
+    if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+    try { recognitionRef.current?.abort(); } catch (_) {}
+  }, []);
+
+  return (
+    <>
+      <div style={{position:"fixed",right:28,bottom:28,zIndex:3000,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:10}}>
+        {message && (
+          <div style={{width:290,padding:"12px 14px",borderRadius:14,background:"#fff",border:"1px solid #dbeafe",boxShadow:"0 10px 30px rgba(15,23,42,.16)",fontSize:12,lineHeight:1.45,color:"#334155"}}>
+            <b style={{display:"block",color:"#0f172a",marginBottom:4}}>🎙️ Voice Route Assistant</b>
+            {heard && <div style={{marginBottom:5}}><b>You said:</b> “{heard}”</div>}
+            <div>{message}</div>
+          </div>
+        )}
+        <button type="button" onClick={listening ? () => stopListening("Voice input stopped.") : startListening} aria-label={listening ? "Stop voice route assistant" : "Start voice route assistant"} title={listening ? "Stop voice route assistant" : "Speak any route naturally"} style={{width:68,height:68,borderRadius:"50%",border:"none",cursor:"pointer",background:listening?"#ef4444":"#1677ff",color:"#fff",fontSize:27,boxShadow:"0 12px 28px rgba(15,23,42,.22)"}}>{listening ? "⏹️" : "🎙️"}</button>
+      </div>
+    </>
+  );
+}
+
+function RoutePage({vehicles,reports,alerts,riskScore,selectedRoute,alternatives,findRoute,loading,setPage,locations,originName,destinationName,setOriginName,setDestinationName,origin,destination,routeGeometry,routeDistance,routeDuration,routeError,pickMode,setPickMode,onMapPick,setOrigin,setDestination,setSelectedRoute,setAlternatives,setRouteGeometry,setRouteDistance,setRouteDuration,setRouteError}) {
   const endpointOptions = locations.map(l => l.name);
   return <div className="panel">
     <div className="panel-header"><div><h2>🧭 AI Route Optimizer</h2><p>Choose endpoints, calculate a real road route, then score it for safety, delay and accessibility.</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div>
@@ -1037,6 +1346,355 @@ function locationToCoordinates(location) {
   return null;
 }
 
+
+/*
+  NER-LOGIX multilingual UI
+  EN = English, HI = Hindi, AS = Assamese.
+  The translation layer watches the complete rendered UI, including
+  React pages and Leaflet popups/controls, so changing the language
+  updates the whole application without changing the existing logic.
+*/
+const NER_LOGIX_TRANSLATIONS = {
+  HI: {
+    "NORTH EASTERN REGION · NER-LOGIX":"उत्तर पूर्वी क्षेत्र · NER-LOGIX",
+    "Smart Logistics":"स्मार्ट लॉजिस्टिक्स",
+    "Logistics Intelligence Dashboard":"लॉजिस्टिक्स इंटेलिजेंस डैशबोर्ड",
+    "AI-powered accessibility & transportation monitoring":"एआई-संचालित पहुंच और परिवहन निगरानी",
+    "ONLINE":"ऑनलाइन","OFFLINE":"ऑफलाइन","Network connected":"नेटवर्क कनेक्टेड",
+    "Local offline mode":"स्थानीय ऑफलाइन मोड","AI Engine Online":"एआई इंजन ऑनलाइन",
+    "AI Engine Offline":"एआई इंजन ऑफलाइन","Dashboard":"डैशबोर्ड",
+    "Live Map":"लाइव मानचित्र","Vehicles":"वाहन","Risk Analysis":"जोखिम विश्लेषण",
+    "Route Optimizer":"रूट अनुकूलक","Alerts":"अलर्ट","Field Reports":"फील्ड रिपोर्ट",
+    "Analytics":"विश्लेषण","Emergency Center":"आपातकालीन केंद्र",
+    "Driver Registrations":"ड्राइवर पंजीकरण","Logout":"लॉगआउट",
+    "Logistics Intelligence Dashboard":"लॉजिस्टिक्स इंटेलिजेंस डैशबोर्ड",
+    "Live Regional Operations Map":"लाइव क्षेत्रीय संचालन मानचित्र",
+    "Vehicle Monitoring":"वाहन निगरानी","AI Risk Analysis":"एआई जोखिम विश्लेषण",
+    "AI Route Optimizer":"एआई रूट अनुकूलक","Alerts & Notifications":"अलर्ट और सूचनाएं",
+    "Field Intelligence Center":"फील्ड इंटेलिजेंस केंद्र",
+    "Analytics & Intelligence":"विश्लेषण और इंटेलिजेंस",
+    "Emergency Command Center":"आपातकालीन कमांड सेंटर",
+    "Review and approve logistics driver registration requests":"लॉजिस्टिक्स ड्राइवर पंजीकरण अनुरोधों की समीक्षा और स्वीकृति",
+    "GIS visibility across roads, districts and monitored fleet":"सड़कों, जिलों और निगरानी किए गए बेड़े की GIS दृश्यता",
+    "Live GPS tracking & logistics fleet intelligence":"लाइव GPS ट्रैकिंग और लॉजिस्टिक्स फ्लीट इंटेलिजेंस",
+    "Explainable corridor risk prediction":"व्याख्यात्मक कॉरिडोर जोखिम पूर्वानुमान",
+    "AI-assisted safer route selection":"एआई-सहायित सुरक्षित मार्ग चयन",
+    "Centralized logistics and accessibility alerts":"केंद्रीकृत लॉजिस्टिक्स और पहुंच अलर्ट",
+    "Geo-tagged incident reporting with offline-first sync":"ऑफलाइन-फर्स्ट सिंक के साथ जियो-टैग्ड घटना रिपोर्टिंग",
+    "Operational performance & logistics intelligence":"संचालन प्रदर्शन और लॉजिस्टिक्स इंटेलिजेंस",
+    "Centralized emergency communication and escalation":"केंद्रीकृत आपातकालीन संचार और एस्केलेशन",
+    "Active Vehicles":"सक्रिय वाहन","Accessible Roads":"सुलभ सड़कें",
+    "High Risk Corridors":"उच्च जोखिम कॉरिडोर","Active Alerts":"सक्रिय अलर्ट",
+    "Average Fuel":"औसत ईंधन","AI Risk":"एआई जोखिम",
+    "moving":"चल रहे","Across monitored districts":"निगरानी किए गए जिलों में",
+    "Requires attention":"ध्यान आवश्यक","Real-time response queue":"रीयल-टाइम प्रतिक्रिया कतार",
+    "Fleet average":"फ्लीट औसत","High":"उच्च","Medium":"मध्यम","Low":"कम","Critical":"गंभीर",
+    "Safe":"सुरक्षित","Moderate":"मध्यम","High Risk":"उच्च जोखिम","Low Risk":"कम जोखिम",
+    "Regional Operations Map":"क्षेत्रीय संचालन मानचित्र",
+    "Live GIS view · corridors · fleet · risk zones":"लाइव GIS दृश्य · कॉरिडोर · फ्लीट · जोखिम क्षेत्र",
+    "LIVE GIS":"लाइव GIS","AI Risk Command":"एआई जोखिम कमांड",
+    "NH-13 · Tawang corridor":"NH-13 · तवांग कॉरिडोर","AI LIVE":"एआई लाइव",
+    "Current corridor assessment · synchronized with Analytics":"वर्तमान कॉरिडोर आकलन · Analytics के साथ सिंक्रोनाइज़",
+    "Rainfall":"वर्षा","Landslide":"भूस्खलन","Traffic":"यातायात",
+    "Road Damage":"सड़क क्षति","Terrain":"भू-भाग",
+    "AI Recommendation":"एआई अनुशंसा","Refresh AI Assessment":"एआई आकलन रीफ्रेश करें",
+    "Find Safer Route":"सुरक्षित मार्ग खोजें","Analyzing...":"विश्लेषण हो रहा है...",
+    "Optimizing...":"अनुकूलन हो रहा है...","Selected:":"चयनित:",
+    "Route risk:":"मार्ग जोखिम:","Corridor baseline:":"कॉरिडोर आधार:",
+    "Fleet Command":"फ्लीट कमांड","Live logistics telemetry":"लाइव लॉजिस्टिक्स टेलीमेट्री",
+    "View All":"सभी देखें","Response Queue":"प्रतिक्रिया कतार",
+    "Latest accessibility events":"नवीनतम पहुंच घटनाएं",
+    "Regional accessibility risk comparison":"क्षेत्रीय पहुंच जोखिम तुलना",
+    "Risk Monitoring":"जोखिम निगरानी","Risk factor breakdown":"जोखिम कारक विवरण",
+    "Inputs currently influencing corridor risk":"वर्तमान में कॉरिडोर जोखिम को प्रभावित करने वाले इनपुट",
+    "Risk Distribution":"जोखिम वितरण","Risk Evolution":"जोखिम विकास",
+    "Live Regional Map":"लाइव क्षेत्रीय मानचित्र",
+    "GIS operations view with vehicles, risk corridors and AI alternate routing":"वाहनों, जोखिम कॉरिडोर और एआई वैकल्पिक रूटिंग के साथ GIS संचालन दृश्य",
+    "Vehicle Monitoring":"वाहन निगरानी","Fleet & GPS Command":"फ्लीट और GPS कमांड",
+    "Live logistics vehicle telemetry across monitored corridors":"निगरानी किए गए कॉरिडोर में लाइव लॉजिस्टिक्स वाहन टेलीमेट्री",
+    "Cargo":"कार्गो","Status":"स्थिति","Speed":"गति","Fuel":"ईंधन","ETA":"अनुमानित समय",
+    "Risk":"जोखिम","Delivery progress":"डिलीवरी प्रगति","Delivery progress and distance utilization":"डिलीवरी प्रगति और दूरी उपयोग",
+    "AI Risk Analysis":"एआई जोखिम विश्लेषण",
+    "Explainable corridor risk assessment from the FastAPI risk engine":"FastAPI जोखिम इंजन से व्याख्यात्मक कॉरिडोर जोखिम आकलन",
+    "Connected to FastAPI":"FastAPI से कनेक्टेड","Backend unavailable":"बैकएंड उपलब्ध नहीं",
+    "Run Fresh Prediction":"नया पूर्वानुमान चलाएं","Recommendation":"अनुशंसा",
+    "AI Route Optimizer":"एआई रूट अनुकूलक","Route Intelligence":"रूट इंटेलिजेंस",
+    "Origin":"प्रारंभ","Destination":"गंतव्य","Select origin":"प्रारंभ चुनें",
+    "Select destination":"गंतव्य चुनें","Map selection active":"मानचित्र चयन सक्रिय",
+    "Choose endpoints, calculate a real road route, then score it for safety, delay and accessibility.":"प्रारंभ और गंतव्य चुनें, वास्तविक सड़क मार्ग निकालें और फिर सुरक्षा, देरी और पहुंच के आधार पर उसका स्कोर करें।",
+    "Route Performance":"रूट प्रदर्शन","Recommended route":"अनुशंसित मार्ग",
+    "Alerts & Notifications":"अलर्ट और सूचनाएं","Centralized logistics, accessibility and emergency response queue":"केंद्रीकृत लॉजिस्टिक्स, पहुंच और आपातकालीन प्रतिक्रिया कतार",
+    "Resolve":"समाधान करें","Field Intelligence":"फील्ड इंटेलिजेंस",
+    "Geo-tagged incident reporting with offline-first synchronization":"ऑफलाइन-फर्स्ट सिंक्रोनाइज़ेशन के साथ जियो-टैग्ड घटना रिपोर्टिंग",
+    "Submit road, weather or accessibility intelligence":"सड़क, मौसम या पहुंच संबंधी जानकारी भेजें",
+    "New Field Report":"नई फील्ड रिपोर्ट","Incident Type":"घटना प्रकार",
+    "Severity":"गंभीरता","Location / District":"स्थान / जिला","Reporter / Field Unit":"रिपोर्टर / फील्ड यूनिट",
+    "Latitude":"अक्षांश","Longitude":"देशांतर","Description":"विवरण",
+    "Save Geo-Tagged Report":"जियो-टैग्ड रिपोर्ट सहेजें","Report Queue":"रिपोर्ट कतार",
+    "Persisted field intelligence":"सहेजी गई फील्ड जानकारी","Online & Sync Ready":"ऑनलाइन और सिंक तैयार",
+    "Offline & Saving Locally":"ऑफलाइन और स्थानीय रूप से सहेजा जा रहा है",
+    "Sync":"सिंक","No sync recorded":"कोई सिंक रिकॉर्ड नहीं",
+    "Analytics & Intelligence Center":"विश्लेषण और इंटेलिजेंस केंद्र",
+    "Key Performance Indicators":"मुख्य प्रदर्शन संकेतक","Fleet Utilization":"फ्लीट उपयोग",
+    "Fleet Risk vs Fuel":"फ्लीट जोखिम बनाम ईंधन","Fuel Intelligence":"ईंधन इंटेलिजेंस",
+    "Fuel Status":"ईंधन स्थिति","GPS Fleet Performance":"GPS फ्लीट प्रदर्शन",
+    "Delivery Performance":"डिलीवरी प्रदर्शन","Alert Activity":"अलर्ट गतिविधि",
+    "Response queue activity over the monitoring period":"निगरानी अवधि में प्रतिक्रिया कतार गतिविधि",
+    "Safety, reliability and efficiency comparison":"सुरक्षा, विश्वसनीयता और दक्षता तुलना",
+    "Combined fleet and logistics performance indicator":"फ्लीट और लॉजिस्टिक्स प्रदर्शन का संयुक्त संकेतक",
+    "Current fleet risk classification":"वर्तमान फ्लीट जोखिम वर्गीकरण",
+    "Current fuel reserve across the monitored fleet":"निगरानी किए गए फ्लीट में वर्तमान ईंधन भंडार",
+    "Current logistics performance snapshot":"वर्तमान लॉजिस्टिक्स प्रदर्शन स्नैपशॉट",
+    "Completed vs delayed logistics movement":"पूर्ण बनाम विलंबित लॉजिस्टिक्स गतिविधि",
+    "Automatically generated platform insights":"स्वचालित रूप से जनरेट किए गए प्लेटफॉर्म इनसाइट्स",
+    "Emergency Command Center":"आपातकालीन कमांड सेंटर",
+    "Broadcast, acknowledge and escalate critical regional incidents":"गंभीर क्षेत्रीय घटनाओं को प्रसारित, स्वीकार और एस्केलेट करें",
+    "Active Emergencies":"सक्रिय आपातकाल","Broadcasts Sent":"भेजे गए प्रसारण",
+    "Critical Events":"गंभीर घटनाएं","Response queue":"प्रतिक्रिया कतार",
+    "Regional notifications":"क्षेत्रीय सूचनाएं","Immediate attention":"तत्काल ध्यान",
+    "Broadcast Emergency Alert":"आपातकालीन अलर्ट प्रसारित करें",
+    "Publish a centralized operational alert for response teams.":"प्रतिक्रिया टीमों के लिए केंद्रीकृत संचालन अलर्ट प्रकाशित करें।",
+    "Emergency Message":"आपातकालीन संदेश","Broadcast Alert":"अलर्ट प्रसारित करें",
+    "Emergency Workflow":"आपातकालीन कार्यप्रवाह","Detect → Broadcast → Acknowledge → Escalate":"पता लगाएं → प्रसारित करें → स्वीकार करें → एस्केलेट करें",
+    "Acknowledge":"स्वीकार करें","Escalate":"एस्केलेट करें",
+    "Demo Control":"डेमो नियंत्रण","Local simulation · GIS · AI risk · GPS":"स्थानीय सिमुलेशन · GIS · एआई जोखिम · GPS",
+    "Search location...":"स्थान खोजें...","Search":"खोजें",
+    "Search powered by OpenStreetMap Nominatim":"OpenStreetMap Nominatim द्वारा संचालित खोज",
+    "Map Controls":"मानचित्र नियंत्रण","Emergency Mode: ON":"आपातकालीन मोड: चालू",
+    "Emergency routing active":"आपातकालीन रूटिंग सक्रिय",
+    "Accessible routes first · high-risk roads avoided · essential supplies prioritized":"पहले सुलभ मार्ग · उच्च जोखिम वाली सड़कों से बचाव · आवश्यक आपूर्ति को प्राथमिकता",
+    "OpenStreetMap":"OpenStreetMap","OSM Humanitarian":"OSM मानवीय",
+    "Satellite":"सैटेलाइट","Risk Zones":"जोखिम क्षेत्र","Alerts":"अलर्ट",
+    "Vehicles":"वाहन","Emergency Centers":"आपातकालीन केंद्र",
+    "AI Safer Route · green waypoints":"एआई सुरक्षित मार्ग · हरे वेपॉइंट",
+    "GPS telemetry active":"GPS टेलीमेट्री सक्रिय","Demo Route":"डेमो मार्ग",
+    "Landslide Risk Detected":"भूस्खलन जोखिम पाया गया","Heavy Rainfall":"भारी वर्षा",
+    "Delivery Delayed":"डिलीवरी में देरी","GPS Tracking Active":"GPS ट्रैकिंग सक्रिय",
+    "Road Blockage":"सड़क अवरोध","Flood":"बाढ़","Vehicle Incident":"वाहन घटना",
+    "Medical Emergency":"चिकित्सा आपातकाल","Road Damage":"सड़क क्षति","Other":"अन्य",
+    "Open":"खुला","Resolved":"समाधान किया गया","Acknowledged":"स्वीकृत","Escalated":"एस्केलेटेड",
+    "Pending":"लंबित","Synced":"सिंक किया गया","Broadcasted":"प्रसारित",
+    "Just now":"अभी","Now":"अभी","5 min ago":"5 मिनट पहले","18 min ago":"18 मिनट पहले","32 min ago":"32 मिनट पहले",
+    "High Road Damage at West Kameng":"वेस्ट कामेंग में सड़क क्षति अधिक है",
+    "Route risk":"मार्ग जोखिम","Road condition":"सड़क की स्थिति",
+    "Good":"अच्छा","Poor":"खराब",
+    "Moderate Risk":"मध्यम जोखिम","High Risk":"उच्च जोखिम",
+    "AI Engine Online":"एआई इंजन ऑनलाइन","AI Engine Offline":"एआई इंजन ऑफलाइन"
+  },
+  AS: {
+    "NORTH EASTERN REGION · NER-LOGIX":"উত্তৰ-পূব অঞ্চল · NER-LOGIX",
+    "Smart Logistics":"স্মাৰ্ট লজিষ্টিক্স","Logistics Intelligence Dashboard":"লজিষ্টিক্স ইণ্টেলিজেন্স ড্যাশব'ৰ্ড",
+    "AI-powered accessibility & transportation monitoring":"AI-চালিত প্ৰৱেশযোগ্যতা আৰু পৰিবহণ নিৰীক্ষণ",
+    "ONLINE":"অনলাইন","OFFLINE":"অফলাইন","Network connected":"নেটৱৰ্ক সংযুক্ত",
+    "Local offline mode":"স্থানীয় অফলাইন মোড","AI Engine Online":"AI ইঞ্জিন অনলাইন",
+    "AI Engine Offline":"AI ইঞ্জিন অফলাইন","Dashboard":"ড্যাশব'ৰ্ড",
+    "Live Map":"লাইভ মানচিত্ৰ","Vehicles":"যানবাহন","Risk Analysis":"ঝুঁকি বিশ্লেষণ",
+    "Route Optimizer":"ৰুট অপ্টিমাইজাৰ","Alerts":"সতৰ্কবাৰ্তা","Field Reports":"ফিল্ড ৰিপ'ৰ্ট",
+    "Analytics":"বিশ্লেষণ","Emergency Center":"জৰুৰীকালীন কেন্দ্ৰ","Driver Registrations":"ড্ৰাইভাৰ পঞ্জীয়ন",
+    "Live Regional Operations Map":"লাইভ আঞ্চলিক অপাৰেচন মানচিত্ৰ","Vehicle Monitoring":"যানবাহন নিৰীক্ষণ",
+    "AI Risk Analysis":"AI ঝুঁকি বিশ্লেষণ","AI Route Optimizer":"AI ৰুট অপ্টিমাইজাৰ",
+    "Alerts & Notifications":"সতৰ্কবাৰ্তা আৰু জাননী","Field Intelligence Center":"ফিল্ড ইণ্টেলিজেন্স কেন্দ্ৰ",
+    "Analytics & Intelligence":"বিশ্লেষণ আৰু ইণ্টেলিজেন্স","Emergency Command Center":"জৰুৰীকালীন কমাণ্ড কেন্দ্ৰ",
+    "Review and approve logistics driver registration requests":"লজিষ্টিক্স ড্ৰাইভাৰ পঞ্জীয়ন অনুৰোধ পৰ্যালোচনা আৰু অনুমোদন কৰক",
+    "GIS visibility across roads, districts and monitored fleet":"পথ, জিলা আৰু নিৰীক্ষণ কৰা ফ্লীটৰ GIS দৃশ্যমানতা",
+    "Live GPS tracking & logistics fleet intelligence":"লাইভ GPS ট্ৰেকিং আৰু লজিষ্টিক্স ফ্লীট ইণ্টেলিজেন্স",
+    "Explainable corridor risk prediction":"ব্যাখ্যাযোগ্য কৰিডৰ ঝুঁকি পূৰ্বানুমান",
+    "AI-assisted safer route selection":"AI-সহায়িত সুৰক্ষিত ৰুট নিৰ্বাচন",
+    "Centralized logistics and accessibility alerts":"কেন্দ্ৰীভূত লজিষ্টিক্স আৰু প্ৰৱেশযোগ্যতা সতৰ্কবাৰ্তা",
+    "Geo-tagged incident reporting with offline-first sync":"অফলাইন-প্ৰথম ছিংকৰ সৈতে জিঅ'-টেগ কৰা ঘটনা ৰিপ'ৰ্ট",
+    "Operational performance & logistics intelligence":"অপাৰেচনেল প্ৰদৰ্শন আৰু লজিষ্টিক্স ইণ্টেলিজেন্স",
+    "Centralized emergency communication and escalation":"কেন্দ্ৰীভূত জৰুৰীকালীন যোগাযোগ আৰু এস্কেলেচন",
+    "Active Vehicles":"সক্ৰিয় যানবাহন","Accessible Roads":"প্ৰৱেশযোগ্য পথ",
+    "High Risk Corridors":"উচ্চ ঝুঁকিৰ কৰিডৰ","Active Alerts":"সক্ৰিয় সতৰ্কবাৰ্তা",
+    "Average Fuel":"গড় ইন্ধন","AI Risk":"AI ঝুঁকি","moving":"চলি আছে",
+    "Across monitored districts":"নিৰীক্ষণ কৰা জিলাসমূহত","Requires attention":"মনোযোগ প্ৰয়োজন",
+    "Real-time response queue":"ৰিয়েল-টাইম প্ৰতিক্ৰিয়া শাৰী","Fleet average":"ফ্লীটৰ গড়",
+    "High":"উচ্চ","Medium":"মধ্যম","Low":"কম","Critical":"গুৰুতৰ",
+    "Safe":"সুৰক্ষিত","Moderate":"মধ্যম","High Risk":"উচ্চ ঝুঁকি","Low Risk":"কম ঝুঁকি",
+    "Regional Operations Map":"আঞ্চলিক অপাৰেচন মানচিত্ৰ",
+    "Live GIS view · corridors · fleet · risk zones":"লাইভ GIS দৃশ্য · কৰিডৰ · ফ্লীট · ঝুঁকি অঞ্চল",
+    "LIVE GIS":"লাইভ GIS","AI Risk Command":"AI ঝুঁকি কমাণ্ড",
+    "NH-13 · Tawang corridor":"NH-13 · টাৱাং কৰিডৰ","AI LIVE":"AI লাইভ",
+    "Current corridor assessment · synchronized with Analytics":"বৰ্তমান কৰিডৰ মূল্যায়ন · Analytics-ৰ সৈতে ছিংক",
+    "Rainfall":"বৰষুণ","Landslide":"ভূমিস্খলন","Traffic":"যানজঁট","Road Damage":"পথৰ ক্ষতি","Terrain":"ভূ-প্ৰকৃতি",
+    "AI Recommendation":"AI পৰামৰ্শ","Refresh AI Assessment":"AI মূল্যায়ন ৰিফ্ৰেছ কৰক",
+    "Find Safer Route":"সুৰক্ষিত ৰুট বিচাৰক","Analyzing...":"বিশ্লেষণ চলি আছে...",
+    "Optimizing...":"অপ্টিমাইজ কৰা হৈছে...","Selected:":"নিৰ্বাচিত:",
+    "Route risk:":"ৰুট ঝুঁকি:","Corridor baseline:":"কৰিডৰ বেচলাইন:",
+    "Fleet Command":"ফ্লীট কমাণ্ড","Live logistics telemetry":"লাইভ লজিষ্টিক্স টেলিমেট্ৰি",
+    "View All":"সকলো চাওক","Response Queue":"প্ৰতিক্ৰিয়া শাৰী",
+    "Latest accessibility events":"শেহতীয়া প্ৰৱেশযোগ্যতা ঘটনা",
+    "Risk factor breakdown":"ঝুঁকি কাৰকৰ বিৱৰণ",
+    "Inputs currently influencing corridor risk":"বৰ্তমান কৰিডৰ ঝুঁকিত প্ৰভাৱ পেলোৱা ইনপুট",
+    "Risk Distribution":"ঝুঁকি বিতৰণ","Risk Monitoring":"ঝুঁকি নিৰীক্ষণ",
+    "Live Regional Map":"লাইভ আঞ্চলিক মানচিত্ৰ",
+    "GIS operations view with vehicles, risk corridors and AI alternate routing":"যানবাহন, ঝুঁকি কৰিডৰ আৰু AI বিকল্প ৰুটিঙৰ সৈতে GIS অপাৰেচন দৃশ্য",
+    "Fleet & GPS Command":"ফ্লীট আৰু GPS কমাণ্ড",
+    "Live logistics vehicle telemetry across monitored corridors":"নিৰীক্ষণ কৰা কৰিডৰসমূহত লাইভ লজিষ্টিক্স যানবাহন টেলিমেট্ৰি",
+    "Cargo":"কাৰ্গো","Status":"অৱস্থা","Speed":"গতি","Fuel":"ইন্ধন","ETA":"আনুমানিক সময়",
+    "Risk":"ঝুঁকি","Delivery progress":"ডেলিভাৰী অগ্ৰগতি",
+    "Delivery progress and distance utilization":"ডেলিভাৰী অগ্ৰগতি আৰু দূৰত্ব ব্যৱহাৰ",
+    "Explainable corridor risk assessment from the FastAPI risk engine":"FastAPI ঝুঁকি ইঞ্জিনৰ পৰা ব্যাখ্যাযোগ্য কৰিডৰ ঝুঁকি মূল্যায়ন",
+    "Connected to FastAPI":"FastAPI-ৰ সৈতে সংযুক্ত","Backend unavailable":"বেকএণ্ড উপলব্ধ নহয়",
+    "Run Fresh Prediction":"নতুন পূৰ্বানুমান চলাওক","Recommendation":"পৰামৰ্শ",
+    "Route Intelligence":"ৰুট ইণ্টেলিজেন্স","Origin":"আৰম্ভণি","Destination":"গন্তব্য",
+    "Select origin":"আৰম্ভণি নিৰ্বাচন কৰক","Select destination":"গন্তব্য নিৰ্বাচন কৰক",
+    "Map selection active":"মানচিত্ৰ নিৰ্বাচন সক্ৰিয়",
+    "Choose endpoints, calculate a real road route, then score it for safety, delay and accessibility.":"আৰম্ভণি আৰু গন্তব্য বাছক, বাস্তৱ পথ গণনা কৰক আৰু সুৰক্ষা, বিলম্ব আৰু প্ৰৱেশযোগ্যতাৰ ভিত্তিত স্কোৰ কৰক।",
+    "Route Performance":"ৰুট প্ৰদৰ্শন","Recommended route":"পৰামৰ্শিত ৰুট",
+    "Centralized logistics, accessibility and emergency response queue":"কেন্দ্ৰীভূত লজিষ্টিক্স, প্ৰৱেশযোগ্যতা আৰু জৰুৰীকালীন প্ৰতিক্ৰিয়া শাৰী",
+    "Resolve":"সমাধান কৰক","Field Intelligence":"ফিল্ড ইণ্টেলিজেন্স",
+    "Submit road, weather or accessibility intelligence":"পথ, বতৰ বা প্ৰৱেশযোগ্যতাৰ তথ্য জমা দিয়ক",
+    "New Field Report":"নতুন ফিল্ড ৰিপ'ৰ্ট","Incident Type":"ঘটনাৰ ধৰণ",
+    "Severity":"তীব্ৰতা","Location / District":"স্থান / জিলা","Reporter / Field Unit":"ৰিপ'ৰ্টাৰ / ফিল্ড ইউনিট",
+    "Latitude":"অক্ষাংশ","Longitude":"দ্ৰাঘিমাংশ","Description":"বিৱৰণ",
+    "Save Geo-Tagged Report":"জিঅ'-টেগ ৰিপ'ৰ্ট সংৰক্ষণ কৰক","Report Queue":"ৰিপ'ৰ্ট শাৰী",
+    "Persisted field intelligence":"সংৰক্ষিত ফিল্ড তথ্য","Online & Sync Ready":"অনলাইন আৰু ছিংকৰ বাবে প্ৰস্তুত",
+    "Offline & Saving Locally":"অফলাইন আৰু স্থানীয়ভাৱে সংৰক্ষণ কৰা হৈছে","Sync":"ছিংক",
+    "No sync recorded":"কোনো ছিংক ৰেকৰ্ড নাই",
+    "Analytics & Intelligence Center":"বিশ্লেষণ আৰু ইণ্টেলিজেন্স কেন্দ্ৰ",
+    "Key Performance Indicators":"মুখ্য প্ৰদৰ্শন সূচক","Fleet Utilization":"ফ্লীট ব্যৱহাৰ",
+    "Fleet Risk vs Fuel":"ফ্লীট ঝুঁকি বনাম ইন্ধন","Fuel Intelligence":"ইন্ধন ইণ্টেলিজেন্স",
+    "Fuel Status":"ইন্ধন অৱস্থা","GPS Fleet Performance":"GPS ফ্লীট প্ৰদৰ্শন",
+    "Delivery Performance":"ডেলিভাৰী প্ৰদৰ্শন","Alert Activity":"সতৰ্কবাৰ্তা কাৰ্যকলাপ",
+    "Safety, reliability and efficiency comparison":"সুৰক্ষা, নিৰ্ভৰযোগ্যতা আৰু দক্ষতাৰ তুলনা",
+    "Combined fleet and logistics performance indicator":"ফ্লীট আৰু লজিষ্টিক্স প্ৰদৰ্শনৰ সংযুক্ত সূচক",
+    "Current fleet risk classification":"বৰ্তমান ফ্লীট ঝুঁকি শ্ৰেণীবিভাজন",
+    "Current fuel reserve across the monitored fleet":"নিৰীক্ষণ কৰা ফ্লীটৰ বৰ্তমান ইন্ধন মজুত",
+    "Current logistics performance snapshot":"বৰ্তমান লজিষ্টিক্স প্ৰদৰ্শনৰ স্নেপশ্বট",
+    "Completed vs delayed logistics movement":"সম্পূৰ্ণ বনাম বিলম্বিত লজিষ্টিক্স গতি",
+    "Automatically generated platform insights":"স্বয়ংক্ৰিয়ভাৱে সৃষ্টি কৰা প্লেটফৰ্ম ইনছাইট",
+    "Broadcast, acknowledge and escalate critical regional incidents":"গুৰুতৰ আঞ্চলিক ঘটনাসমূহ প্ৰচাৰ, স্বীকাৰ আৰু এস্কেলেট কৰক",
+    "Active Emergencies":"সক্ৰিয় জৰুৰীকালীন অৱস্থা","Broadcasts Sent":"প্ৰেৰণ কৰা প্ৰচাৰ",
+    "Critical Events":"গুৰুতৰ ঘটনা","Response queue":"প্ৰতিক্ৰিয়া শাৰী",
+    "Regional notifications":"আঞ্চলিক জাননী","Immediate attention":"তৎক্ষণাত মনোযোগ",
+    "Broadcast Emergency Alert":"জৰুৰীকালীন সতৰ্কবাৰ্তা প্ৰচাৰ কৰক",
+    "Publish a centralized operational alert for response teams.":"প্ৰতিক্ৰিয়া দলৰ বাবে কেন্দ্ৰীভূত অপাৰেচনেল সতৰ্কবাৰ্তা প্ৰকাশ কৰক।",
+    "Emergency Message":"জৰুৰীকালীন বাৰ্তা","Broadcast Alert":"সতৰ্কবাৰ্তা প্ৰচাৰ কৰক",
+    "Emergency Workflow":"জৰুৰীকালীন কাৰ্যপ্ৰবাহ","Detect → Broadcast → Acknowledge → Escalate":"চিনাক্ত → প্ৰচাৰ → স্বীকাৰ → এস্কেলেট",
+    "Acknowledge":"স্বীকাৰ কৰক","Escalate":"এস্কেলেট কৰক","Logout":"লগআউট",
+    "Search location...":"স্থান বিচাৰক...","Search":"বিচাৰক",
+    "Search powered by OpenStreetMap Nominatim":"OpenStreetMap Nominatim-ৰ দ্বাৰা চালিত অনুসন্ধান",
+    "Map Controls":"মানচিত্ৰ নিয়ন্ত্ৰণ","Emergency Mode: ON":"জৰুৰীকালীন মোড: অন",
+    "Emergency routing active":"জৰুৰীকালীন ৰুটিং সক্ৰিয়",
+    "Accessible routes first · high-risk roads avoided · essential supplies prioritized":"প্ৰথমে প্ৰৱেশযোগ্য পথ · উচ্চ ঝুঁকিৰ পথ এৰাই চলা · অত্যাৱশ্যকীয় সামগ্ৰীক অগ্ৰাধিকাৰ",
+    "OpenStreetMap":"OpenStreetMap","OSM Humanitarian":"OSM মানৱীয়","Satellite":"ছেটেলাইট",
+    "Risk Zones":"ঝুঁকি অঞ্চল","Emergency Centers":"জৰুৰীকালীন কেন্দ্ৰ",
+    "AI Safer Route · green waypoints":"AI সুৰক্ষিত ৰুট · সেউজ ৱেপইণ্ট",
+    "GPS telemetry active":"GPS টেলিমেট্ৰি সক্ৰিয়",
+    "Landslide Risk Detected":"ভূমিস্খলন ঝুঁকি ধৰা পৰিছে","Heavy Rainfall":"ভাৰী বৰষুণ",
+    "Delivery Delayed":"ডেলিভাৰী বিলম্বিত","GPS Tracking Active":"GPS ট্ৰেকিং সক্ৰিয়",
+    "Road Blockage":"পথ অৱৰোধ","Flood":"বান","Vehicle Incident":"যানবাহন ঘটনা",
+    "Medical Emergency":"চিকিৎসা জৰুৰীকালীন অৱস্থা","Other":"অন্যান্য",
+    "Open":"খোলা","Resolved":"সমাধান কৰা","Acknowledged":"স্বীকৃত","Escalated":"এস্কেলেট কৰা",
+    "Pending":"অমীমাংসিত","Synced":"ছিংক কৰা","Broadcasted":"প্ৰচাৰ কৰা",
+    "Just now":"এতিয়াই","Now":"এতিয়া","5 min ago":"৫ মিনিট আগতে","18 min ago":"১৮ মিনিট আগতে","32 min ago":"৩২ মিনিট আগতে",
+    "Good":"ভাল","Poor":"বেয়া","Moderate Risk":"মধ্যম ঝুঁকি"
+  }
+};
+
+const nerTranslationNodeState = new WeakMap();
+const nerTranslationAttrState = new WeakMap();
+
+function nerTranslateValue(value, language) {
+  if (!value || language === "EN") return value;
+  const dictionary = NER_LOGIX_TRANSLATIONS[language] || {};
+  if (Object.prototype.hasOwnProperty.call(dictionary, value)) return dictionary[value];
+
+  let output = value;
+  const entries = Object.entries(dictionary).sort((a,b)=>b[0].length-a[0].length);
+  for (const [source,target] of entries) {
+    if (!source) continue;
+    output = output.split(source).join(target);
+  }
+  return output;
+}
+
+function useNERLogixLanguage(language) {
+  useEffect(() => {
+    const root = document.body;
+    if (!root) return;
+
+    const ignoredTags = new Set(["SCRIPT","STYLE","NOSCRIPT"]);
+    const watchedAttributes = ["placeholder","title","aria-label","aria-description"];
+
+    const translate = () => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      let node;
+      while ((node = walker.nextNode())) nodes.push(node);
+
+      for (const textNode of nodes) {
+        if (ignoredTags.has(textNode.parentElement?.tagName)) continue;
+        const current = textNode.nodeValue || "";
+        let state = nerTranslationNodeState.get(textNode);
+
+        if (!state) {
+          state = { original: current, last: current };
+          nerTranslationNodeState.set(textNode, state);
+        } else if (current !== state.last) {
+          state.original = current;
+        }
+
+        const translated = nerTranslateValue(state.original, language);
+        if (textNode.nodeValue !== translated) {
+          state.last = translated;
+          textNode.nodeValue = translated;
+        } else {
+          state.last = translated;
+        }
+      }
+
+      const elements = root.querySelectorAll("*");
+      for (const element of elements) {
+        if (ignoredTags.has(element.tagName)) continue;
+        let attrState = nerTranslationAttrState.get(element);
+        if (!attrState) {
+          attrState = {};
+          nerTranslationAttrState.set(element, attrState);
+        }
+
+        for (const attr of watchedAttributes) {
+          if (!element.hasAttribute(attr)) continue;
+          const current = element.getAttribute(attr) || "";
+          let state = attrState[attr];
+          if (!state) {
+            state = { original: current, last: current };
+            attrState[attr] = state;
+          } else if (current !== state.last) {
+            state.original = current;
+          }
+          const translated = nerTranslateValue(state.original, language);
+          if (current !== translated) {
+            state.last = translated;
+            element.setAttribute(attr, translated);
+          } else {
+            state.last = translated;
+          }
+        }
+      }
+    };
+
+    translate();
+
+    const observer = new MutationObserver(() => {
+      observer.disconnect();
+      translate();
+      observer.observe(root, {childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:watchedAttributes});
+    });
+
+    observer.observe(root, {
+      childList:true,
+      subtree:true,
+      characterData:true,
+      attributes:true,
+      attributeFilter:watchedAttributes
+    });
+
+    return () => observer.disconnect();
+  }, [language]);
+}
+
 function EmergencyCenter({emergencies,setEmergencies,setAlerts,setPage,language}) { const [form,setForm]=useState({type:"Road Blockage",severity:"Critical",location:"Tawang, Arunachal Pradesh",message:""}); const broadcast=e=>{e.preventDefault();const id=Date.now();const item={id,...form,icon:iconFor(form.type),time:"Just now",status:"Broadcasted"};setEmergencies(x=>[item,...x]);const coords=locationToCoordinates(form.location);setAlerts(x=>[{id:id+1,type:`Emergency: ${form.type}`,icon:item.icon,severity:form.severity,location:form.location,latitude:coords?.[0],longitude:coords?.[1],description:form.message,time:"Just now",status:"Open"},...x]);setForm(x=>({...x,message:""}));}; const ack=id=>setEmergencies(x=>x.map(e=>e.id===id?{...e,status:"Acknowledged"}:e)); const esc=id=>setEmergencies(x=>x.map(e=>e.id===id?{...e,status:"Escalated"}:e)); const critical=emergencies.filter(e=>e.severity==="Critical"&&e.status!=="Resolved").length; return <><div className="panel"><div className="panel-header"><div><h2>🆘 Emergency Command Center</h2><p>Broadcast, acknowledge and escalate critical regional incidents</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div className="stats-grid" style={{marginTop:18}}>{[["🚨","Active Emergencies",emergencies.length,"Response queue"],["📡","Broadcasts Sent",emergencies.length,"Regional notifications"],["🔴","Critical Events",critical,"Immediate attention"]].map(x=><div className="stat-card" key={x[1]}><div className="stat-icon">{x[0]}</div><div><span>{x[1]}</span><strong>{x[2]}</strong><small>{x[3]}</small></div></div>)}</div></div><div className="panel" style={{marginTop:18}}><h2>📢 Broadcast Emergency Alert</h2><p>Publish a centralized operational alert for response teams.</p><form onSubmit={broadcast} style={{marginTop:16}}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14}}><div className="form-group"><label>Incident Type</label><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{["Landslide","Flood","Road Blockage","Heavy Rainfall","Vehicle Incident","Medical Emergency"].map(x=><option key={x}>{x}</option>)}</select></div><div className="form-group"><label>Severity</label><select value={form.severity} onChange={e=>setForm({...form,severity:e.target.value})}>{["Critical","High","Medium"].map(x=><option key={x}>{x}</option>)}</select></div><div className="form-group"><label>Location / District</label><input required value={form.location} onChange={e=>setForm({...form,location:e.target.value})}/></div></div><div className="form-group"><label>Emergency Message</label><textarea required rows="4" value={form.message} onChange={e=>setForm({...form,message:e.target.value})} placeholder="Describe the emergency and required action..."/></div><button className="route-button">📡 Broadcast Alert</button></form></div><div className="panel" style={{marginTop:18}}><div className="panel-header"><div><h2>⚡ Emergency Workflow</h2><p>Detect → Broadcast → Acknowledge → Escalate</p></div></div><div style={{display:"grid",gap:12,marginTop:16}}>{emergencies.map(e=><div key={e.id} style={{padding:16,border:"1px solid #e5e7eb",borderRadius:14,background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><b>{e.icon} {e.type} · {e.location}</b><div style={{marginTop:5,fontSize:13}}>{e.message}</div></div><span className={sevClass(e.severity)}>{e.severity}</span></div><div style={{display:"flex",justifyContent:"space-between",gap:12,marginTop:12,flexWrap:"wrap"}}><small>{e.time} · <b>{e.status}</b></small><div style={{display:"flex",gap:8}}><button className="view-button" disabled={e.status==="Acknowledged"||e.status==="Escalated"} onClick={()=>ack(e.id)}>✓ Acknowledge</button><button className="view-button" disabled={e.status==="Escalated"} onClick={()=>esc(e.id)}>⬆ Escalate</button></div></div></div>)}</div></div></>; }
 
 export default function App() {
@@ -1055,6 +1713,7 @@ export default function App() {
     if(!access.includes(page)) setPage("Dashboard");
   },[page,user?.role]);
   const [language,setLanguage]=useState("EN");
+  useNERLogixLanguage(language);
   const [isOnline,setIsOnline]=useState(()=>typeof navigator==="undefined"?true:navigator.onLine);
   const [backendOnline,setBackendOnline]=useState(false);
   const [vehicles,setVehicles]=useState(initialVehicles);
@@ -1221,9 +1880,11 @@ export default function App() {
     return Math.min(35, getRouteIncidentAnalysis(routeGeometryInput).penalty * 0.35);
   }
 
-  async function findRoute(originOverride=origin,destinationOverride=destination,emergencyOverride=null){
+  async function findRoute(originOverride=origin,destinationOverride=destination,emergencyOverride=null,originNameOverride=null,destinationNameOverride=null){
     const emergencyRouting=emergencyOverride===null?emergencyMode:emergencyOverride;
     const o=originOverride; const d=destinationOverride;
+    const routeOriginName=originNameOverride || originName;
+    const routeDestinationName=destinationNameOverride || destinationName;
     if(!o || !d) return;
     setRouteLoading(true); setRouteError("");
 
@@ -1269,7 +1930,7 @@ export default function App() {
         return {
           route_id:`LIVE-${index+1}`,
           name:index===0
-            ? `${originName} → ${destinationName} · Live Road Route`
+            ? `${routeOriginName} → ${routeDestinationName} · Live Road Route`
             : `Alternative Road Route ${index}`,
           distance_km:Number(distanceKm.toFixed(1)),
           estimated_minutes:Number(minutes.toFixed(0)),
@@ -1400,7 +2061,7 @@ export default function App() {
       );
       const fallback={
         route_id:"DEMO-1",
-        name:`${originName} → ${destinationName} · Demo Route`,
+        name:`${routeOriginName} → ${routeDestinationName} · Demo Route`,
         distance_km:Number(distanceKm.toFixed(1)),
         estimated_minutes:minutes,
         delay_minutes:delay,
@@ -1439,6 +2100,15 @@ export default function App() {
   function syncNow(){if(!isOnline){setSyncMessage("Offline — reports remain safely stored on this device.");return}const count=pendingSyncCount;setReports(rs=>rs.map(r=>r.syncStatus==="Pending"?{...r,syncStatus:"Synced"}:r));const now=new Date().toISOString();setLastSync(now);try{localStorage.setItem(STORAGE.lastSync,now)}catch(_){}setSyncMessage(count?`${count} pending report(s) synchronized in demo mode.`:"All local reports are already synchronized.")}
   function resolveAlert(id){setAlerts(xs=>xs.map(a=>a.id===id?{...a,status:"Resolved"}:a))}
   function refreshAlerts(){setAlerts(xs=>xs.map(a=>a.status==="Open"?{...a,time:"Just now"}:a))}
+  function handleVoiceRoute(from, to){
+    setOriginName(from.name);
+    setDestinationName(to.name);
+    setOrigin(from.position);
+    setDestination(to.position);
+    setPickMode(null);
+    setRouteError("");
+    findRoute(from.position, to.position, null, from.name, to.name);
+  }
   function handleEmergencyModeToggle(){
     const next=!emergencyMode;
     setEmergencyMode(next);
@@ -1450,11 +2120,23 @@ export default function App() {
   else if(page==="Live Map") content=<GenericMapPage {...{vehicles,reports,alerts,alternatives,riskScore,selectedRoute,setPage,routeGeometry,origin,destination,emergencyMode,onEmergencyModeToggle:handleEmergencyModeToggle}}/>;
   else if(page==="Vehicles") content=<VehiclesPage {...{vehicles,setPage}}/>;
   else if(page==="Risk Analysis") content=<RiskPage {...{riskScore,riskLevel,riskFactors,recommendation,fetchRisk,aiLoading,backendOnline,setPage}}/>;
-  else if(page==="Route Optimizer") content=<RoutePage {...{vehicles,reports,alerts,riskScore,selectedRoute,alternatives,findRoute,loading:routeLoading,setPage,originName,destinationName,setOriginName,setDestinationName,origin,destination,routeGeometry,routeDistance,routeDuration,routeError,pickMode,setPickMode,onMapPick:handleMapPick,setOrigin,setDestination,setSelectedRoute,setAlternatives,setRouteGeometry,setRouteDistance,setRouteDuration,setRouteError}}/>;
+  else if(page==="Route Optimizer") content=<RoutePage {...{vehicles,reports,alerts,riskScore,selectedRoute,alternatives,findRoute,loading:routeLoading,setPage,locations,originName,destinationName,setOriginName,setDestinationName,origin,destination,routeGeometry,routeDistance,routeDuration,routeError,pickMode,setPickMode,onMapPick:handleMapPick,setOrigin,setDestination,setSelectedRoute,setAlternatives,setRouteGeometry,setRouteDistance,setRouteDuration,setRouteError}}/>;
   else if(page==="Alerts") content=<AlertsPage {...{alerts,resolve:resolveAlert,refresh:refreshAlerts,setPage}}/>;
   else if(page==="Field Reports") content=<FieldReports {...{reports,setReports,alerts,setAlerts,isOnline,pendingSyncCount,syncNow,lastSync,reportForm,setReportForm,setPage}}/>;
   else if(page==="Analytics") content=<Analytics {...{vehicles,alerts,reports,riskScore,riskFactors,setPage}}/>;
   else if(page==="Driver Registrations") content=<DriverRegistrations setPage={setPage}/>;
   else content=<EmergencyCenter {...{emergencies,setEmergencies,setAlerts,setPage,language}}/>;
-  return <Shell {...{page,setPage,alertCount,language,setLanguage,isOnline,backendOnline,pendingSyncCount,title,subtitle,user,logout}}>{content}</Shell>;
+  return (
+    <Shell {...{page,setPage,alertCount,language,setLanguage,isOnline,backendOnline,pendingSyncCount,title,subtitle,user,logout}}>
+      {content}
+      {page === "Dashboard" && (
+        <VoiceRouteAssistant
+          locations={locations}
+          onRoute={handleVoiceRoute}
+          language={language}
+          setLanguage={setLanguage}
+        />
+      )}
+    </Shell>
+  );
 }
