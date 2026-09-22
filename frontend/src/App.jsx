@@ -128,6 +128,686 @@ function Header({ title, subtitle, language, setLanguage, alertCount, setPage, i
   </header>;
 }
 
+
+const nerLogixMobileStyles = `
+  * { box-sizing: border-box; }
+
+  html, body, #root {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .app {
+    min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .main {
+    min-width: 0;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .header {
+    min-width: 0;
+  }
+
+  .header > div:first-child {
+    min-width: 0;
+  }
+
+  .header h1,
+  .header p,
+  .panel h2,
+  .panel h3,
+  .panel p,
+  .stat-card,
+  .vehicle-row,
+  .alert-row {
+    overflow-wrap: anywhere;
+  }
+
+  .panel,
+  .stat-card,
+  .vehicle-row,
+  .alert-row,
+  .route-message,
+  .form-group,
+  .map-panel,
+  .risk-panel {
+    min-width: 0;
+  }
+
+  .panel {
+    max-width: 100%;
+  }
+
+  .panel > *,
+  .panel-header > * {
+    min-width: 0;
+  }
+
+  img, svg, canvas, iframe {
+    max-width: 100%;
+  }
+
+  button, input, select, textarea {
+    max-width: 100%;
+    font: inherit;
+  }
+
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-bottom-nav {
+    display: none;
+  }
+
+  .mobile-page-scroll {
+    scrollbar-width: none;
+  }
+
+  @media (max-width: 1100px) {
+    .sidebar {
+      width: 220px !important;
+      min-width: 220px !important;
+    }
+
+    .main {
+      padding-bottom: 20px;
+    }
+
+    .content-grid,
+    .bottom-grid {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .stats-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+  }
+
+  @media (max-width: 760px) {
+    body {
+      background: #f8fafc;
+    }
+
+    .app {
+      display: block !important;
+      min-height: 100vh;
+      padding-bottom: 76px;
+    }
+
+    .sidebar {
+      display: none !important;
+    }
+
+    .main {
+      width: 100% !important;
+      min-width: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+
+    .header {
+      position: sticky !important;
+      top: 0 !important;
+      z-index: 2000 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 10px !important;
+      padding: 13px 14px !important;
+      margin: 0 !important;
+      background: rgba(255,255,255,.96) !important;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid #e2e8f0;
+      box-shadow: 0 5px 18px rgba(15,23,42,.06);
+    }
+
+    .header > div:first-child {
+      width: 100% !important;
+    }
+
+    .region-title {
+      font-size: 9px !important;
+      letter-spacing: .08em !important;
+      line-height: 1.3 !important;
+    }
+
+    .header h1 {
+      font-size: 20px !important;
+      line-height: 1.15 !important;
+      margin: 4px 0 3px !important;
+    }
+
+    .header p {
+      font-size: 11px !important;
+      line-height: 1.4 !important;
+      margin: 0 !important;
+      color: #64748b;
+    }
+
+    .header-actions {
+      width: 100% !important;
+      display: grid !important;
+      grid-template-columns: minmax(0,1fr) auto auto auto !important;
+      gap: 7px !important;
+      justify-content: stretch !important;
+      align-items: center !important;
+    }
+
+    .header-actions > span {
+      min-width: 0 !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      text-align: center !important;
+      padding: 8px 7px !important;
+      font-size: 10px !important;
+    }
+
+    .header-actions .language-button,
+    .header-actions .notification-button,
+    .header-actions .view-button {
+      min-width: 40px !important;
+      min-height: 40px !important;
+      padding: 7px !important;
+      border-radius: 11px !important;
+    }
+
+    .header-actions .profile {
+      display: none !important;
+    }
+
+    .header-actions .view-button {
+      font-size: 0 !important;
+    }
+
+    .header-actions .view-button::before {
+      content: "↪";
+      font-size: 19px;
+    }
+
+    .main > *:not(.header) {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .panel {
+      margin-left: 10px !important;
+      margin-right: 10px !important;
+      width: calc(100% - 20px) !important;
+      max-width: none !important;
+      padding: 14px !important;
+      border-radius: 16px !important;
+      overflow: hidden !important;
+    }
+
+    .panel-header {
+      display: flex !important;
+      align-items: flex-start !important;
+      gap: 10px !important;
+      flex-wrap: wrap !important;
+    }
+
+    .panel-header > div:first-child {
+      flex: 1 1 180px !important;
+    }
+
+    .panel-header h2 {
+      font-size: 17px !important;
+      line-height: 1.25 !important;
+      margin: 0 !important;
+    }
+
+    .panel-header p {
+      font-size: 11px !important;
+      line-height: 1.45 !important;
+      margin-top: 4px !important;
+    }
+
+    .panel-header .view-button {
+      min-height: 40px !important;
+      white-space: nowrap !important;
+    }
+
+    .stats-grid {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 9px !important;
+      margin: 10px !important;
+    }
+
+    .stat-card {
+      min-height: 90px !important;
+      padding: 12px !important;
+      border-radius: 14px !important;
+      gap: 9px !important;
+    }
+
+    .stat-card .stat-icon {
+      width: 34px !important;
+      height: 34px !important;
+      min-width: 34px !important;
+      font-size: 17px !important;
+      border-radius: 10px !important;
+    }
+
+    .stat-card span {
+      font-size: 10px !important;
+      line-height: 1.25 !important;
+    }
+
+    .stat-card strong {
+      font-size: 19px !important;
+      line-height: 1.15 !important;
+      display: block !important;
+      margin-top: 2px !important;
+    }
+
+    .stat-card small {
+      font-size: 9px !important;
+      line-height: 1.25 !important;
+    }
+
+    .content-grid,
+    .bottom-grid {
+      display: grid !important;
+      grid-template-columns: minmax(0,1fr) !important;
+      gap: 12px !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+
+    .content-grid > .panel,
+    .bottom-grid > .panel {
+      width: calc(100% - 20px) !important;
+    }
+
+    .map-panel .real-map,
+    .map-panel .leaflet-container,
+    .panel .leaflet-container {
+      width: 100% !important;
+      height: 360px !important;
+      min-height: 300px !important;
+      border-radius: 13px !important;
+      touch-action: pan-x pan-y !important;
+    }
+
+    .map-legend {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 6px 10px !important;
+      font-size: 10px !important;
+      line-height: 1.3 !important;
+    }
+
+    .risk-score {
+      gap: 12px !important;
+      align-items: center !important;
+    }
+
+    .score-circle {
+      flex: 0 0 auto !important;
+    }
+
+    .risk-factors {
+      gap: 7px !important;
+    }
+
+    .route-button,
+    .view-button,
+    .language-button,
+    .notification-button {
+      min-height: 44px !important;
+      touch-action: manipulation;
+    }
+
+    .route-button {
+      width: 100%;
+    }
+
+    .vehicle-row {
+      display: grid !important;
+      grid-template-columns: auto minmax(0,1fr) auto !important;
+      gap: 8px !important;
+      padding: 12px !important;
+      border-radius: 13px !important;
+    }
+
+    .vehicle-route {
+      grid-column: 2 / -1 !important;
+      min-width: 0 !important;
+      font-size: 11px !important;
+      overflow-wrap: anywhere !important;
+    }
+
+    .vehicle-status {
+      font-size: 10px !important;
+    }
+
+    .alert-row {
+      display: grid !important;
+      grid-template-columns: auto minmax(0,1fr) !important;
+      gap: 9px !important;
+      align-items: start !important;
+      padding: 12px !important;
+      border-radius: 13px !important;
+    }
+
+    .alert-row > :last-child {
+      grid-column: 2 !important;
+    }
+
+    .alert-row > div {
+      min-width: 0 !important;
+    }
+
+    .alert-row small,
+    .alert-row span,
+    .alert-row b {
+      overflow-wrap: anywhere !important;
+    }
+
+    .form-group {
+      width: 100% !important;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea,
+    input,
+    select,
+    textarea {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-height: 46px !important;
+      font-size: 16px !important;
+      box-sizing: border-box !important;
+      border-radius: 11px !important;
+    }
+
+    textarea {
+      min-height: 120px !important;
+      resize: vertical !important;
+    }
+
+    /* Inline desktop grids used throughout the app become single-column cards. */
+    .panel > div[style*="grid-template-columns:repeat(2"],
+    .panel > div[style*="grid-template-columns: repeat(2"],
+    .panel > div[style*="minmax(250px"],
+    .panel > div[style*="minmax(320px"],
+    .panel > div[style*="repeat(auto-fit"] {
+      grid-template-columns: minmax(0,1fr) !important;
+    }
+
+    .panel > div[style*="grid-template-columns:repeat(4"],
+    .panel > div[style*="grid-template-columns: repeat(4"] {
+      grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+    }
+
+    .field-reports-layout {
+      display: grid !important;
+      grid-template-columns: minmax(0,1fr) !important;
+      gap: 12px !important;
+      margin-top: 12px !important;
+    }
+
+    .field-reports-layout > .panel {
+      width: calc(100% - 20px) !important;
+    }
+
+    .field-coordinates-grid {
+      grid-template-columns: minmax(0,1fr) !important;
+      gap: 0 !important;
+    }
+
+    .field-reports-layout .real-map {
+      height: 340px !important;
+      min-height: 340px !important;
+    }
+
+    .field-reports-layout .leaflet-control-zoom a {
+      width: 40px !important;
+      height: 40px !important;
+      line-height: 40px !important;
+      font-size: 20px !important;
+    }
+
+    .leaflet-control-attribution {
+      font-size: 8px !important;
+    }
+
+    .leaflet-popup-content {
+      max-width: 220px !important;
+      font-size: 13px !important;
+      line-height: 1.45 !important;
+    }
+
+    .mobile-bottom-nav {
+      position: fixed;
+      display: flex;
+      left: 8px;
+      right: 8px;
+      bottom: 8px;
+      z-index: 5000;
+      height: 60px;
+      padding: 6px;
+      gap: 4px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      background: rgba(255,255,255,.96);
+      border: 1px solid #dbeafe;
+      border-radius: 18px;
+      box-shadow: 0 12px 35px rgba(15,23,42,.18);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      scrollbar-width: none;
+    }
+
+    .mobile-bottom-nav::-webkit-scrollbar {
+      display: none;
+    }
+
+    .mobile-nav-item {
+      flex: 0 0 auto;
+      min-width: 64px;
+      height: 48px;
+      padding: 4px 8px;
+      border: 0;
+      border-radius: 13px;
+      background: transparent;
+      color: #64748b;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      font-size: 9px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .mobile-nav-item span:first-child {
+      font-size: 17px;
+      line-height: 18px;
+    }
+
+    .mobile-nav-item.active {
+      background: #eff6ff;
+      color: #2563eb;
+    }
+
+    .mobile-nav-item.alert-active {
+      color: #dc2626;
+    }
+
+    .mobile-nav-item.active.alert-active {
+      background: #fef2f2;
+    }
+
+    .mobile-voice-assistant {
+      right: 14px !important;
+      bottom: 82px !important;
+    }
+
+    .mobile-voice-assistant > div:first-child {
+      width: min(290px, calc(100vw - 28px)) !important;
+    }
+
+    .mobile-voice-assistant button {
+      width: 58px !important;
+      height: 58px !important;
+    }
+
+    /* Analytics charts and wide tables/cards */
+    .recharts-wrapper {
+      max-width: 100% !important;
+    }
+
+    .recharts-surface {
+      max-width: 100% !important;
+    }
+
+    table {
+      width: 100% !important;
+      display: block !important;
+      overflow-x: auto !important;
+      white-space: nowrap !important;
+      font-size: 12px !important;
+    }
+
+    /* Keep long analytics cards readable instead of overflowing. */
+    .panel [style*="display:grid"],
+    .panel [style*="display: grid"] {
+      min-width: 0 !important;
+    }
+
+    .panel [style*="display:flex"],
+    .panel [style*="display: flex"] {
+      min-width: 0 !important;
+    }
+
+    .panel [style*="display:flex"] > *,
+    .panel [style*="display: flex"] > * {
+      min-width: 0 !important;
+    }
+  }
+
+  @media (max-width: 430px) {
+    .header {
+      padding: 11px 11px !important;
+    }
+
+    .header-actions {
+      grid-template-columns: minmax(0,1fr) 40px 40px 40px !important;
+    }
+
+    .panel {
+      margin-left: 7px !important;
+      margin-right: 7px !important;
+      width: calc(100% - 14px) !important;
+      padding: 12px !important;
+      border-radius: 14px !important;
+    }
+
+    .stats-grid {
+      margin-left: 7px !important;
+      margin-right: 7px !important;
+      gap: 7px !important;
+    }
+
+    .stat-card {
+      min-height: 84px !important;
+      padding: 10px !important;
+    }
+
+    .stat-card strong {
+      font-size: 17px !important;
+    }
+
+    .panel h2 {
+      font-size: 16px !important;
+    }
+
+    .panel h3 {
+      font-size: 15px !important;
+    }
+
+    .map-panel .leaflet-container,
+    .panel .leaflet-container {
+      height: 315px !important;
+      min-height: 280px !important;
+    }
+
+    .field-reports-layout .real-map {
+      height: 300px !important;
+      min-height: 300px !important;
+    }
+
+    .mobile-bottom-nav {
+      left: 5px;
+      right: 5px;
+      bottom: 5px;
+      height: 58px;
+      border-radius: 17px;
+    }
+
+    .mobile-nav-item {
+      min-width: 59px;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .stats-grid {
+      grid-template-columns: minmax(0,1fr) !important;
+    }
+
+    .header-actions {
+      grid-template-columns: minmax(0,1fr) 38px 38px 38px !important;
+    }
+
+    .mobile-nav-item {
+      min-width: 56px;
+      font-size: 8px;
+    }
+  }
+
+  @media (min-width: 761px) {
+    .mobile-bottom-nav {
+      display: none !important;
+    }
+  }
+`;
+
+function NERLogixMobileStyles() {
+  return <style>{nerLogixMobileStyles}</style>;
+}
+
+function MobileBottomNav({ menu, page, setPage, alertCount }) {
+  return (
+    <nav className="mobile-bottom-nav" aria-label="Mobile application navigation">
+      {menu.map(([icon, name]) => (
+        <button
+          key={name}
+          type="button"
+          className={`mobile-nav-item ${page === name ? "active" : ""} ${name === "Alerts" && alertCount > 0 ? "alert-active" : ""}`}
+          onClick={() => setPage(name)}
+          aria-label={name}
+          title={name}
+        >
+          <span>{icon}</span>
+          <span>{name === "Driver Registrations" ? "Drivers" : name}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function Shell({children, page, setPage, alertCount, language, setLanguage, isOnline, backendOnline, pendingSyncCount, title, subtitle, user, logout}) {
   const allMenu=[
     ["📊","Dashboard"],["🗺️","Live Map"],["🚚","Vehicles"],
@@ -143,6 +823,7 @@ function Shell({children, page, setPage, alertCount, language, setLanguage, isOn
   const allowedPages=roleAccess[user?.role] || ["Dashboard"];
   const menu=allMenu.filter(([,name])=>allowedPages.includes(name));
   return <div className="app">
+    <NERLogixMobileStyles />
     <aside className="sidebar" style={{display:"flex",flexDirection:"column"}}>
       <div className="brand"><div className="brand-logo">NL</div><div><h2>NER-LOGIX</h2><span>Smart Logistics</span></div></div>
       <nav>{menu.map(([icon,name])=><button key={name} className={`menu-item ${page===name?"active":""}`} onClick={()=>setPage(name)}><span>{icon}</span>{name}{name==="Alerts"&&alertCount>0?<b style={{marginLeft:"auto",fontSize:11}}>{alertCount}</b>:null}</button>)}</nav>
@@ -152,6 +833,7 @@ function Shell({children, page, setPage, alertCount, language, setLanguage, isOn
       </div>
     </aside>
     <main className="main"><Header {...{title,subtitle,language,setLanguage,alertCount,setPage,isOnline,backendOnline,pendingSyncCount,user,logout}} />{children}</main>
+    <MobileBottomNav menu={menu} page={page} setPage={setPage} alertCount={alertCount} />
   </div>;
 }
 
@@ -490,7 +1172,7 @@ function VoiceRouteAssistant({ locations, onRoute, language = "EN", setLanguage 
 
   return (
     <>
-      <div style={{position:"fixed",right:28,bottom:28,zIndex:3000,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:10}}>
+      <div className="mobile-voice-assistant" style={{position:"fixed",right:28,bottom:28,zIndex:3000,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:10}}>
         {message && (
           <div style={{width:290,padding:"12px 14px",borderRadius:14,background:"#fff",border:"1px solid #dbeafe",boxShadow:"0 10px 30px rgba(15,23,42,.16)",fontSize:12,lineHeight:1.45,color:"#334155"}}>
             <b style={{display:"block",color:"#0f172a",marginBottom:4}}>🎙️ Voice Route Assistant</b>
