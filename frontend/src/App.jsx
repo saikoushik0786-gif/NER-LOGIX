@@ -554,8 +554,318 @@ function RoutePage({vehicles,reports,alerts,riskScore,selectedRoute,alternatives
 
 function AlertsPage({alerts,resolve,refresh,setPage}) { const [filter,setFilter]=useState("All"); const list=filter==="All"?alerts:alerts.filter(a=>a.severity===filter); const counts={Open:alerts.filter(a=>a.status==="Open").length,Critical:alerts.filter(a=>a.status==="Open"&&a.severity==="Critical").length,High:alerts.filter(a=>a.status==="Open"&&a.severity==="High").length}; return <><div className="panel"><div className="panel-header"><div><h2>🚨 Alerts & Notifications</h2><p>Centralized logistics, accessibility and emergency response queue</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div className="stats-grid" style={{marginTop:18}}>{[["🔔","Open Alerts",counts.Open,"Active"],["🔴","Critical",counts.Critical,"Immediate attention"],["🟠","High",counts.High,"Needs monitoring"]].map(x=><div className="stat-card" key={x[1]}><div className="stat-icon">{x[0]}</div><div><span>{x[1]}</span><strong>{x[2]}</strong><small>{x[3]}</small></div></div>)}</div><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:18}}>{["All","Critical","High","Medium","Low"].map(f=><button className="view-button" key={f} onClick={()=>setFilter(f)} style={{fontWeight:filter===f?800:500,border:filter===f?"2px solid #2563eb":"1px solid #e5e7eb"}}>{f}</button>)}<button className="route-button" onClick={refresh} style={{marginLeft:"auto"}}>🔄 Refresh</button></div></div><div className="panel" style={{marginTop:18}}>{list.map(a=><div className={`alert-row ${a.severity==="Critical"?"critical":a.severity==="Low"?"info":"warning"}`} key={a.id} style={{marginBottom:10,opacity:a.status==="Resolved"?.55:1}}><div className="alert-icon">{a.icon}</div><div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><strong>{a.type}</strong><span className={sevClass(a.severity)}>{a.severity}</span><span>{a.status}</span></div><span>{a.location}</span><small style={{display:"block",marginTop:4}}>{a.description}</small></div><div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}><small>{a.time}</small>{a.status==="Open"&&<button className="view-button" onClick={()=>resolve(a.id)}>✓ Resolve</button>}</div></div>)}</div></>; }
 
-function FieldReports({reports,setReports,alerts,setAlerts,isOnline,pendingSyncCount,syncNow,lastSync,reportForm,setReportForm,setPage}) { const submit=e=>{e.preventDefault();const id=Date.now();const latitude=Number(reportForm.latitude);const longitude=Number(reportForm.longitude);if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||latitude<-90||latitude>90||longitude<-180||longitude>180){window.alert("Please enter valid latitude and longitude.");return;}const r={id,...reportForm,latitude,longitude,icon:iconFor(reportForm.type),time:"Just now",status:"Open",syncStatus:isOnline?"Synced":"Pending"};setReports(x=>[r,...x]);if(["High","Critical"].includes(r.severity))setAlerts(x=>[{id:id+1,type:`Field Report: ${r.type}`,icon:r.icon,severity:r.severity,location:r.location,latitude:r.latitude,longitude:r.longitude,description:r.description,time:"Just now",status:"Open"},...x]);setReportForm(x=>({...x,description:""}));setPage("Live Map");};return <><div className="panel"><div className="panel-header"><div><h2>📍 Field Intelligence</h2><p>Geo-tagged incident reporting with offline-first synchronization</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div style={{marginTop:16,padding:14,borderRadius:13,background:isOnline?"#f0fdf4":"#fff7ed",border:`1px solid ${isOnline?"#bbf7d0":"#fed7aa"}`,display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><b>{isOnline?"🟢 Online & Sync Ready":"🟠 Offline & Saving Locally"}</b><div style={{fontSize:12,marginTop:4}}>{pendingSyncCount} pending report(s) · {lastSync?`Last sync ${new Date(lastSync).toLocaleString()}`:"No sync recorded"}</div></div><button className="route-button" onClick={syncNow} disabled={!isOnline||pendingSyncCount===0}>🔄 Sync {pendingSyncCount?`(${pendingSyncCount})`:""}</button></div></div><div style={{display:"grid",gridTemplateColumns:"minmax(320px,.85fr) minmax(400px,1.4fr)",gap:18,marginTop:18}}><div className="panel"><h2>📝 New Field Report</h2><p>Submit road, weather or accessibility intelligence</p><form onSubmit={submit} style={{marginTop:16}}>{[["Incident Type","type",["Road Blockage","Landslide","Flood","Heavy Rainfall","Road Damage","Vehicle Incident","Other"]],["Severity","severity",["Low","Medium","High","Critical"]]].map(([l,k,opts])=><div className="form-group" key={k}><label>{l}</label><select value={reportForm[k]} onChange={e=>setReportForm(x=>({...x,[k]:e.target.value}))}>{opts.map(o=><option key={o}>{o}</option>)}</select></div>)}<div className="form-group"><label>Location / District</label><input required value={reportForm.location} onChange={e=>setReportForm(x=>({...x,location:e.target.value}))}/></div><div className="form-group"><label>Reporter / Field Unit</label><input required value={reportForm.reporter} onChange={e=>setReportForm(x=>({...x,reporter:e.target.value}))}/></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><div className="form-group"><label>Latitude</label><input required value={reportForm.latitude} onChange={e=>setReportForm(x=>({...x,latitude:e.target.value}))}/></div><div className="form-group"><label>Longitude</label><input required value={reportForm.longitude} onChange={e=>setReportForm(x=>({...x,longitude:e.target.value}))}/></div></div><div className="form-group"><label>Description</label><textarea required rows="5" value={reportForm.description} onChange={e=>setReportForm(x=>({...x,description:e.target.value}))} placeholder="Describe incident, road condition or accessibility issue..."/></div><button className="route-button" style={{width:"100%"}}>📡 Save Geo-Tagged Report</button></form></div><div className="panel"><div className="panel-header"><div><h2>🛰️ Report Queue</h2><p>Persisted field intelligence</p></div></div><div style={{marginTop:16}}>{reports.map(r=><div className={`alert-row ${r.severity==="Critical"?"critical":r.severity==="Low"?"info":"warning"}`} key={r.id} style={{marginBottom:10}}><div className="alert-icon">{r.icon}</div><div><div><b>{r.type}</b> <span className={sevClass(r.severity)}>{r.severity}</span></div><span>{r.location}</span><small style={{display:"block",marginTop:4}}>👤 {r.reporter} · 📍 {r.latitude}, {r.longitude}</small><small style={{display:"block",marginTop:4}}>{r.description}</small></div><div><small>{r.syncStatus==="Pending"?"⏳ Pending":"✓ Synced"}</small></div></div>)}</div></div></div></>; }
+function FieldReportMap({reports,alerts,reportForm,setReportForm}) {
+  const lat=Number(reportForm?.latitude);
+  const lng=Number(reportForm?.longitude);
+  const validSelected=Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180;
+  const center=validSelected?[lat,lng]:[26.7,92.1];
 
+  function pickLocation(position){
+    const nextLat=Number(position[0].toFixed(6));
+    const nextLng=Number(position[1].toFixed(6));
+    setReportForm(x=>({
+      ...x,
+      latitude:String(nextLat),
+      longitude:String(nextLng)
+    }));
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <div>
+          <h2>🗺️ Incident Location Map</h2>
+          <p>Click anywhere on the map to select the exact incident location.</p>
+        </div>
+        <span className="live-badge">📍 MAP PICKER</span>
+      </div>
+
+      <div style={{marginTop:14,padding:"10px 12px",borderRadius:12,background:"#eff6ff",border:"1px solid #bfdbfe",fontSize:12,lineHeight:1.5}}>
+        <b>How to use:</b> Click the incident location on the map. Latitude and longitude will be filled automatically in the report form.
+      </div>
+
+      <MapContainer
+        key={validSelected ? `${lat.toFixed(6)}-${lng.toFixed(6)}` : "field-report-default"}
+        center={center}
+        zoom={validSelected ? 12 : 6}
+        scrollWheelZoom
+        className="real-map"
+        style={{height:"clamp(300px,45vw,430px)",minHeight:300,borderRadius:14,marginTop:14,cursor:"crosshair"}}
+      >
+        <TileLayer
+          attribution="&copy; OpenStreetMap contributors"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+
+        <MapPickHandler enabled={true} onPick={pickLocation} />
+
+        {(reports || [])
+          .filter(r => {
+            const rLat=Number(r?.latitude);
+            const rLng=Number(r?.longitude);
+            return Number.isFinite(rLat)&&Number.isFinite(rLng);
+          })
+          .map(r => (
+            <CircleMarker
+              key={`report-${r.id}`}
+              center={[Number(r.latitude),Number(r.longitude)]}
+              radius={8}
+              pathOptions={{
+                color:r.severity==="Critical"||r.severity==="High"?"#dc2626":"#f59e0b",
+                fillColor:r.severity==="Critical"||r.severity==="High"?"#ef4444":"#fbbf24",
+                fillOpacity:0.75
+              }}
+            >
+              <Popup>
+                <b>{r.icon} {r.type}</b>
+                <br />
+                Severity: {r.severity}
+                <br />
+                {r.location}
+              </Popup>
+            </CircleMarker>
+          ))}
+
+        {(alerts || [])
+          .filter(a => {
+            const aLat=Number(a?.latitude);
+            const aLng=Number(a?.longitude);
+            return Number.isFinite(aLat)&&Number.isFinite(aLng);
+          })
+          .map(a => (
+            <CircleMarker
+              key={`alert-${a.id}`}
+              center={[Number(a.latitude),Number(a.longitude)]}
+              radius={7}
+              pathOptions={{
+                color:"#7c3aed",
+                fillColor:"#8b5cf6",
+                fillOpacity:0.65,
+                dashArray:"4 3"
+              }}
+            >
+              <Popup>
+                <b>{a.icon} {a.type}</b>
+                <br />
+                Severity: {a.severity}
+                <br />
+                {a.location}
+              </Popup>
+            </CircleMarker>
+          ))}
+
+        {validSelected && (
+          <Marker position={[lat,lng]}>
+            <Popup>
+              <b>📍 New Report Location</b>
+              <br />
+              Latitude: {lat.toFixed(6)}
+              <br />
+              Longitude: {lng.toFixed(6)}
+            </Popup>
+          </Marker>
+        )}
+      </MapContainer>
+
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:12,fontSize:12}}>
+        <span>🔴 High/Critical reports</span>
+        <span>🟠 Other reports</span>
+        <span>🟣 Active alerts</span>
+        <span>📍 New report point</span>
+      </div>
+
+      {validSelected && (
+        <div style={{marginTop:12,padding:12,borderRadius:12,background:"#f0fdf4",border:"1px solid #bbf7d0"}}>
+          <b>📍 Selected coordinates</b>
+          <div style={{marginTop:4,fontSize:13}}>
+            {lat.toFixed(6)}, {lng.toFixed(6)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+const fieldReportsResponsiveStyles = `
+.field-reports-layout{width:100%;min-width:0}
+.field-reports-layout>*{min-width:0}
+.field-reports-layout .panel{min-width:0;overflow:hidden}
+.field-coordinates-grid{min-width:0}
+@media (max-width:900px){.field-reports-layout{grid-template-columns:minmax(0,1fr)!important}}
+@media (max-width:600px){.field-reports-layout{gap:12px!important;margin-top:12px!important}.field-reports-layout>.panel{padding:14px!important;border-radius:14px}.field-reports-layout .panel-header{gap:10px;align-items:flex-start}.field-reports-layout .panel-header h2{font-size:17px;line-height:1.25}.field-reports-layout .panel-header p{font-size:12px;line-height:1.45}.field-reports-layout input,.field-reports-layout select,.field-reports-layout textarea{width:100%;box-sizing:border-box;font-size:16px}.field-coordinates-grid{grid-template-columns:minmax(0,1fr)!important;gap:0!important}.field-reports-layout .route-button,.field-reports-layout .view-button{min-height:44px}.field-reports-layout .real-map{height:330px!important;min-height:330px!important;border-radius:12px!important;touch-action:pan-x pan-y}.field-reports-layout .leaflet-control-zoom a{width:38px;height:38px;line-height:38px;font-size:20px}.field-reports-layout .leaflet-popup-content{max-width:220px;font-size:13px;line-height:1.45}.field-reports-layout .alert-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;padding:12px}.field-reports-layout .alert-row>:last-child{grid-column:2}.field-reports-layout .alert-row>div{min-width:0}.field-reports-layout .alert-row span,.field-reports-layout .alert-row small,.field-reports-layout .alert-row b{overflow-wrap:anywhere}}
+@media (max-width:380px){.field-reports-layout>.panel{padding:12px!important}.field-reports-layout .real-map{height:290px!important;min-height:290px!important}.field-reports-layout .panel-header h2{font-size:16px}}
+`;
+function FieldReportsResponsiveStyles(){return <style>{fieldReportsResponsiveStyles}</style>}
+
+function FieldReports({reports,setReports,alerts,setAlerts,isOnline,pendingSyncCount,syncNow,lastSync,reportForm,setReportForm,setPage}) {
+  const submit=e=>{
+    e.preventDefault();
+    const id=Date.now();
+    const latitude=Number(reportForm.latitude);
+    const longitude=Number(reportForm.longitude);
+
+    if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||latitude<-90||latitude>90||longitude<-180||longitude>180){
+      window.alert("Please select the incident location on the map or enter valid latitude and longitude.");
+      return;
+    }
+
+    const r={
+      id,
+      ...reportForm,
+      latitude,
+      longitude,
+      icon:iconFor(reportForm.type),
+      time:"Just now",
+      status:"Open",
+      syncStatus:isOnline?"Synced":"Pending"
+    };
+
+    setReports(x=>[r,...x]);
+
+    if(["High","Critical"].includes(r.severity)){
+      setAlerts(x=>[{
+        id:id+1,
+        type:`Field Report: ${r.type}`,
+        icon:r.icon,
+        severity:r.severity,
+        location:r.location,
+        latitude:r.latitude,
+        longitude:r.longitude,
+        description:r.description,
+        time:"Just now",
+        status:"Open"
+      },...x]);
+    }
+
+    setReportForm(x=>({...x,description:""}));
+    setPage("Live Map");
+  };
+
+  return (
+    <>
+      <FieldReportsResponsiveStyles />
+      <div className="panel">
+        <div className="panel-header">
+          <div>
+            <h2>📍 Field Intelligence</h2>
+            <p>Geo-tagged incident reporting with offline-first synchronization</p>
+          </div>
+          <button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button>
+        </div>
+
+        <div style={{marginTop:16,padding:14,borderRadius:13,background:isOnline?"#f0fdf4":"#fff7ed",border:`1px solid ${isOnline?"#bbf7d0":"#fed7aa"}`,display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+          <div>
+            <b>{isOnline?"🟢 Online & Sync Ready":"🟠 Offline & Saving Locally"}</b>
+            <div style={{fontSize:12,marginTop:4}}>
+              {pendingSyncCount} pending report(s) · {lastSync?`Last sync ${new Date(lastSync).toLocaleString()}`:"No sync recorded"}
+            </div>
+          </div>
+          <button className="route-button" onClick={syncNow} disabled={!isOnline||pendingSyncCount===0}>
+            🔄 Sync {pendingSyncCount?`(${pendingSyncCount})`:""}
+          </button>
+        </div>
+      </div>
+
+      <div className="field-reports-layout" style={{display:"grid",gridTemplateColumns:"minmax(320px,.85fr) minmax(400px,1.4fr)",gap:18,marginTop:18}}>
+        <div className="panel">
+          <h2>📝 New Field Report</h2>
+          <p>Submit road, weather or accessibility intelligence</p>
+
+          <form onSubmit={submit} style={{marginTop:16}}>
+            {[
+              ["Incident Type","type",["Road Blockage","Landslide","Flood","Heavy Rainfall","Road Damage","Vehicle Incident","Other"]],
+              ["Severity","severity",["Low","Medium","High","Critical"]]
+            ].map(([l,k,opts])=>(
+              <div className="form-group" key={k}>
+                <label>{l}</label>
+                <select value={reportForm[k]} onChange={e=>setReportForm(x=>({...x,[k]:e.target.value}))}>
+                  {opts.map(o=><option key={o}>{o}</option>)}
+                </select>
+              </div>
+            ))}
+
+            <div className="form-group">
+              <label>Location / District</label>
+              <input required value={reportForm.location} onChange={e=>setReportForm(x=>({...x,location:e.target.value}))}/>
+            </div>
+
+            <div className="form-group">
+              <label>Reporter / Field Unit</label>
+              <input required value={reportForm.reporter} onChange={e=>setReportForm(x=>({...x,reporter:e.target.value}))}/>
+            </div>
+
+            <div className="field-coordinates-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div className="form-group">
+                <label>Latitude</label>
+                <input
+                  required
+                  value={reportForm.latitude}
+                  onChange={e=>setReportForm(x=>({...x,latitude:e.target.value}))}
+                  placeholder="Select from map"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Longitude</label>
+                <input
+                  required
+                  value={reportForm.longitude}
+                  onChange={e=>setReportForm(x=>({...x,longitude:e.target.value}))}
+                  placeholder="Select from map"
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Description</label>
+              <textarea required rows="5" value={reportForm.description} onChange={e=>setReportForm(x=>({...x,description:e.target.value}))} placeholder="Describe incident, road condition or accessibility issue..."/>
+            </div>
+
+            <button className="route-button" style={{width:"100%"}}>
+              📡 Save Geo-Tagged Report
+            </button>
+          </form>
+        </div>
+
+        <div style={{display:"grid",gap:18}}>
+          <FieldReportMap
+            reports={reports}
+            alerts={alerts}
+            reportForm={reportForm}
+            setReportForm={setReportForm}
+          />
+
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <h2>🛰️ Report Queue</h2>
+                <p>Persisted field intelligence</p>
+              </div>
+            </div>
+
+            <div style={{marginTop:16}}>
+              {reports.map(r=>(
+                <div className={`alert-row ${r.severity==="Critical"?"critical":r.severity==="Low"?"info":"warning"}`} key={r.id} style={{marginBottom:10}}>
+                  <div className="alert-icon">{r.icon}</div>
+                  <div>
+                    <div>
+                      <b>{r.type}</b> <span className={sevClass(r.severity)}>{r.severity}</span>
+                    </div>
+                    <span>{r.location}</span>
+                    <small style={{display:"block",marginTop:4}}>👤 {r.reporter} · 📍 {r.latitude}, {r.longitude}</small>
+                    <small style={{display:"block",marginTop:4}}>{r.description}</small>
+                  </div>
+                  <div><small>{r.syncStatus==="Pending"?"⏳ Pending":"✓ Synced"}</small></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
 function Analytics({ vehicles, alerts, reports, riskScore, riskFactors, setPage }) {
   const openAlerts = alerts.filter((a) => a.status === "Open");
   const activeReports = (reports || []).filter((r) => String(r?.status || "Open").toLowerCase() !== "resolved");
