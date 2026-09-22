@@ -829,6 +829,114 @@ const nerLogixMobileStyles = `
     }
   }
 
+  /* Final mobile GIS polish: keep Leaflet controls compact and out of the map
+     center. The map remains the visual priority on phones. */
+  @media (max-width: 760px) {
+    .map-panel .leaflet-container,
+    .panel .leaflet-container,
+    .field-reports-layout .leaflet-container {
+      height: 420px !important;
+      min-height: 420px !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      border-radius: 16px !important;
+      overflow: hidden !important;
+    }
+
+    /* Put the zoom widget in the upper-right corner instead of over the
+       left side of the map content. */
+    .leaflet-top.leaflet-left {
+      top: 8px !important;
+      left: auto !important;
+      right: 8px !important;
+    }
+
+    .leaflet-control-zoom {
+      margin: 0 !important;
+      border: 0 !important;
+      border-radius: 12px !important;
+      overflow: hidden !important;
+      box-shadow: 0 4px 14px rgba(15,23,42,.18) !important;
+    }
+
+    .leaflet-control-zoom a,
+    .panel .leaflet-control-zoom a,
+    .field-reports-layout .leaflet-control-zoom a {
+      width: 34px !important;
+      height: 34px !important;
+      line-height: 34px !important;
+      font-size: 17px !important;
+      font-weight: 600 !important;
+      border: 0 !important;
+    }
+
+    .leaflet-control-attribution {
+      right: 4px !important;
+      bottom: 4px !important;
+      padding: 2px 5px !important;
+      font-size: 7px !important;
+      line-height: 1.2 !important;
+      max-width: 72% !important;
+      opacity: .82 !important;
+      border-radius: 5px !important;
+    }
+
+    /* Never let the mobile navigation cover the bottom of a map. */
+    .mobile-bottom-nav {
+      z-index: 5000 !important;
+    }
+
+    /* Keep map legends below the map rather than covering map tiles. */
+    .map-legend {
+      position: static !important;
+      width: 100% !important;
+      margin-top: 9px !important;
+      padding: 8px 0 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+
+    .map-legend span {
+      display: inline-flex !important;
+      align-items: center !important;
+      min-height: 26px !important;
+      padding: 4px 7px !important;
+      border-radius: 8px !important;
+      background: #f8fafc !important;
+      border: 1px solid #e2e8f0 !important;
+      font-size: 9px !important;
+    }
+
+    /* Field-report picker gets the same map-first treatment. */
+    .field-reports-layout .real-map {
+      height: 420px !important;
+      min-height: 420px !important;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .map-panel .leaflet-container,
+    .panel .leaflet-container,
+    .field-reports-layout .leaflet-container {
+      height: 390px !important;
+      min-height: 390px !important;
+    }
+
+    .field-reports-layout .real-map {
+      height: 390px !important;
+      min-height: 390px !important;
+    }
+
+    .leaflet-control-zoom a,
+    .panel .leaflet-control-zoom a,
+    .field-reports-layout .leaflet-control-zoom a {
+      width: 32px !important;
+      height: 32px !important;
+      line-height: 32px !important;
+      font-size: 16px !important;
+    }
+  }
+
   @media (min-width: 761px) {
     .mobile-bottom-nav {
       display: none !important;
