@@ -358,8 +358,136 @@ export default function MapView({
 
   const mapHeight = compact ? 470 : 540;
 
+  const mobileMapStyles = `
+    .ner-map-shell {
+      width: 100%;
+    }
+
+    @media (max-width: 760px) {
+      .ner-map-shell {
+        overflow: visible !important;
+        border: 0 !important;
+        border-radius: 16px !important;
+      }
+
+      .ner-map-container {
+        height: 390px !important;
+        min-height: 390px !important;
+        width: 100% !important;
+        border-radius: 16px !important;
+        overflow: hidden !important;
+        box-shadow: 0 10px 28px rgba(15,23,42,.12);
+      }
+
+      .ner-map-container .leaflet-control-container {
+        z-index: 450 !important;
+      }
+
+      .ner-map-container .leaflet-control-zoom {
+        margin-top: 8px !important;
+        margin-right: 8px !important;
+      }
+
+      .ner-map-container .leaflet-control-zoom a {
+        width: 36px !important;
+        height: 36px !important;
+        line-height: 36px !important;
+        font-size: 19px !important;
+        border: 1px solid #dbe3ef !important;
+        box-shadow: 0 4px 12px rgba(15,23,42,.16) !important;
+      }
+
+      .ner-map-container .leaflet-control-attribution {
+        font-size: 7px !important;
+        padding: 2px 4px !important;
+        opacity: .82;
+      }
+
+      .ner-map-controls {
+        position: static !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 10px 0 0 !important;
+        padding: 12px !important;
+        border: 1px solid #dbeafe !important;
+        border-radius: 16px !important;
+        box-shadow: 0 8px 24px rgba(15,23,42,.10) !important;
+        background: #ffffff !important;
+      }
+
+      .ner-map-controls > div:first-child {
+        font-size: 13px !important;
+        margin-bottom: 9px !important;
+      }
+
+      .ner-map-controls button {
+        min-height: 40px !important;
+        font-size: 11px !important;
+      }
+
+      .ner-map-controls input[type="checkbox"] {
+        width: 18px !important;
+        height: 18px !important;
+        min-height: 18px !important;
+      }
+
+      .ner-map-legend {
+        position: static !important;
+        width: 100% !important;
+        margin: 10px 0 0 !important;
+        padding: 10px 12px !important;
+        border: 1px solid #dbeafe !important;
+        border-radius: 14px !important;
+        background: #ffffff !important;
+        box-shadow: 0 6px 18px rgba(15,23,42,.08) !important;
+        font-size: 10px !important;
+        line-height: 1.6 !important;
+      }
+
+      .ner-map-shell form {
+        top: 10px !important;
+        left: 10px !important;
+        width: min(250px, calc(100% - 62px)) !important;
+        padding: 6px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 5px 16px rgba(15,23,42,.14) !important;
+      }
+
+      .ner-map-shell form input {
+        min-height: 38px !important;
+        font-size: 14px !important;
+      }
+
+      .ner-map-shell form button {
+        min-height: 38px !important;
+        padding: 0 10px !important;
+      }
+
+      .ner-map-shell form > div:last-child {
+        display: none !important;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .ner-map-container {
+        height: 350px !important;
+        min-height: 350px !important;
+      }
+
+      .ner-map-shell form {
+        width: calc(100% - 58px) !important;
+      }
+
+      .ner-map-controls {
+        padding: 10px !important;
+      }
+    }
+  `;
+
   return (
-    <div
+    <>
+      <style>{mobileMapStyles}</style>
+      <div className="ner-map-shell"
       style={{
         position: "relative",
         width: "100%",
@@ -374,7 +502,7 @@ export default function MapView({
         minZoom={5}
         maxZoom={18}
         scrollWheelZoom
-        className="real-map"
+        className="real-map ner-map-container"
         style={{
           height: mapHeight,
           width: "100%",
@@ -739,6 +867,7 @@ export default function MapView({
       </MapContainer>
 
       <div
+        className="ner-map-controls"
         style={{
           position: "absolute",
           zIndex: 1000,
@@ -838,6 +967,7 @@ export default function MapView({
       </div>
 
       <div
+        className="ner-map-legend"
         style={{
           position: "absolute",
           zIndex: 999,
@@ -858,5 +988,6 @@ export default function MapView({
         <span>· 🚚 Fleet · 🚨 Alerts · 🧠 Green route = AI selected{emergencyMode ? " · 🚨 Teal route = Emergency-accessible" : ""}</span>
       </div>
     </div>
+    </>
   );
 }
