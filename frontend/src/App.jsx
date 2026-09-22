@@ -578,8 +578,60 @@ const nerLogixMobileStyles = `
       font-size: 20px !important;
     }
 
+    /* Keep Leaflet controls inside the map and above the mobile bottom navigation. */
+    .panel .leaflet-container,
+    .field-reports-layout .leaflet-container {
+      position: relative !important;
+      z-index: 0 !important;
+      overflow: hidden !important;
+    }
+
+    .panel .leaflet-control-container,
+    .field-reports-layout .leaflet-control-container {
+      position: relative !important;
+      z-index: 400 !important;
+      pointer-events: none !important;
+    }
+
+    .panel .leaflet-control,
+    .field-reports-layout .leaflet-control {
+      pointer-events: auto !important;
+    }
+
+    .panel .leaflet-top,
+    .field-reports-layout .leaflet-top {
+      top: 8px !important;
+    }
+
+    .panel .leaflet-left,
+    .field-reports-layout .leaflet-left {
+      left: 8px !important;
+    }
+
+    .panel .leaflet-right,
+    .field-reports-layout .leaflet-right {
+      right: 8px !important;
+    }
+
+    .panel .leaflet-bottom,
+    .field-reports-layout .leaflet-bottom {
+      bottom: 72px !important;
+    }
+
+    .panel .leaflet-control-zoom a,
+    .field-reports-layout .leaflet-control-zoom a {
+      width: 36px !important;
+      height: 36px !important;
+      line-height: 36px !important;
+      font-size: 18px !important;
+    }
+
     .leaflet-control-attribution {
       font-size: 8px !important;
+      max-width: calc(100% - 16px) !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
     }
 
     .leaflet-popup-content {
