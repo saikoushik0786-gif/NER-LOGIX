@@ -375,6 +375,22 @@ const nerLogixMobileStyles = `
       white-space: nowrap !important;
     }
 
+    .dashboard-date-time-card {
+      justify-content: stretch !important;
+      margin: 0 10px 12px !important;
+    }
+
+    .dashboard-date-time-card > div {
+      width: 100% !important;
+      min-width: 0 !important;
+      text-align: left !important;
+      padding: 11px 13px !important;
+    }
+
+    .dashboard-date-time-card > div > div:nth-child(2) {
+      font-size: 18px !important;
+    }
+
     .stats-grid {
       display: grid !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -829,114 +845,6 @@ const nerLogixMobileStyles = `
     }
   }
 
-  /* Final mobile GIS polish: keep Leaflet controls compact and out of the map
-     center. The map remains the visual priority on phones. */
-  @media (max-width: 760px) {
-    .map-panel .leaflet-container,
-    .panel .leaflet-container,
-    .field-reports-layout .leaflet-container {
-      height: 420px !important;
-      min-height: 420px !important;
-      width: 100% !important;
-      max-width: 100% !important;
-      border-radius: 16px !important;
-      overflow: hidden !important;
-    }
-
-    /* Put the zoom widget in the upper-right corner instead of over the
-       left side of the map content. */
-    .leaflet-top.leaflet-left {
-      top: 8px !important;
-      left: auto !important;
-      right: 8px !important;
-    }
-
-    .leaflet-control-zoom {
-      margin: 0 !important;
-      border: 0 !important;
-      border-radius: 12px !important;
-      overflow: hidden !important;
-      box-shadow: 0 4px 14px rgba(15,23,42,.18) !important;
-    }
-
-    .leaflet-control-zoom a,
-    .panel .leaflet-control-zoom a,
-    .field-reports-layout .leaflet-control-zoom a {
-      width: 34px !important;
-      height: 34px !important;
-      line-height: 34px !important;
-      font-size: 17px !important;
-      font-weight: 600 !important;
-      border: 0 !important;
-    }
-
-    .leaflet-control-attribution {
-      right: 4px !important;
-      bottom: 4px !important;
-      padding: 2px 5px !important;
-      font-size: 7px !important;
-      line-height: 1.2 !important;
-      max-width: 72% !important;
-      opacity: .82 !important;
-      border-radius: 5px !important;
-    }
-
-    /* Never let the mobile navigation cover the bottom of a map. */
-    .mobile-bottom-nav {
-      z-index: 5000 !important;
-    }
-
-    /* Keep map legends below the map rather than covering map tiles. */
-    .map-legend {
-      position: static !important;
-      width: 100% !important;
-      margin-top: 9px !important;
-      padding: 8px 0 0 !important;
-      background: transparent !important;
-      box-shadow: none !important;
-    }
-
-    .map-legend span {
-      display: inline-flex !important;
-      align-items: center !important;
-      min-height: 26px !important;
-      padding: 4px 7px !important;
-      border-radius: 8px !important;
-      background: #f8fafc !important;
-      border: 1px solid #e2e8f0 !important;
-      font-size: 9px !important;
-    }
-
-    /* Field-report picker gets the same map-first treatment. */
-    .field-reports-layout .real-map {
-      height: 420px !important;
-      min-height: 420px !important;
-    }
-  }
-
-  @media (max-width: 420px) {
-    .map-panel .leaflet-container,
-    .panel .leaflet-container,
-    .field-reports-layout .leaflet-container {
-      height: 390px !important;
-      min-height: 390px !important;
-    }
-
-    .field-reports-layout .real-map {
-      height: 390px !important;
-      min-height: 390px !important;
-    }
-
-    .leaflet-control-zoom a,
-    .panel .leaflet-control-zoom a,
-    .field-reports-layout .leaflet-control-zoom a {
-      width: 32px !important;
-      height: 32px !important;
-      line-height: 32px !important;
-      font-size: 16px !important;
-    }
-  }
-
   @media (min-width: 761px) {
     .mobile-bottom-nav {
       display: none !important;
@@ -1008,12 +916,61 @@ function MapPickHandler({enabled, onPick}) {
 }
 
 function Dashboard({vehicles,reports,alerts,alternatives,riskScore,riskLevel,riskFactors,recommendation,backendOnline,aiLoading,aiError,fetchRisk,findRoute,routeLoading,selectedRoute,routeGeometry,origin,destination,setPage,isOnline,pendingSyncCount,emergencyMode,onEmergencyModeToggle}) {
+  const [dashboardDateTime, setDashboardDateTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setDashboardDateTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const dashboardDate = dashboardDateTime.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  const dashboardTime = dashboardDateTime.toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+
   const active=alerts.filter(a=>a.status==="Open").length; const moving=vehicles.filter(v=>v.status==="Moving").length;
   const displayRiskScore=safeNumber(riskScore,69);
   const displayRiskLevel=riskLabel(displayRiskScore);
   const avgFuel=Math.round(vehicles.reduce((s,v)=>s+v.fuel,0)/vehicles.length); const avgRisk=Math.round(vehicles.reduce((s,v)=>s+v.riskScore,0)/vehicles.length);
   return <>
     {!isOnline&&<div style={{marginBottom:16,padding:"13px 16px",borderRadius:14,background:"#fff7ed",border:"1px solid #fed7aa",display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><b>🟠 Offline Mode Active</b><span>Field updates remain on this device. {pendingSyncCount} report(s) waiting for sync.</span></div>}
+
+    <div
+      className="dashboard-date-time-card"
+      style={{
+        display:"flex",
+        justifyContent:"flex-end",
+        marginBottom:14,
+      }}
+    >
+      <div
+        style={{
+          minWidth:190,
+          padding:"10px 14px",
+          borderRadius:14,
+          background:"#ffffff",
+          border:"1px solid #e2e8f0",
+          boxShadow:"0 4px 14px rgba(15,23,42,.05)",
+          textAlign:"right",
+        }}
+      >
+        <div style={{fontSize:11,fontWeight:700,color:"#64748b",letterSpacing:".04em"}}>📅 {dashboardDate}</div>
+        <div style={{fontSize:20,fontWeight:800,color:"#0f172a",lineHeight:1.25,marginTop:2}}>🕐 {dashboardTime}</div>
+        <div style={{fontSize:10,fontWeight:600,color:"#94a3b8",marginTop:2}}>IST · India</div>
+      </div>
+    </div>
+
     <section className="stats-grid">
       {[ ["🚚","Active Vehicles",vehicles.length,`${moving} moving`],["🛣️","Accessible Roads","87%","Across monitored districts"],["⚠️","High Risk Corridors","07","Requires attention"],["🚨","Active Alerts",active,"Real-time response queue"],["⛽","Average Fuel",`${avgFuel}%`,"Fleet average"],["🧠","AI Risk",`${displayRiskScore}/100`,displayRiskLevel] ].map(([i,l,v,s],idx)=><div className="stat-card" key={l}><div className="stat-icon">{i}</div><div><span>{l}</span><strong className={idx===3||(idx===5&&displayRiskScore>=60)?"danger":""}>{v}</strong><small>{s}</small></div></div>)}
     </section>
@@ -1540,169 +1497,287 @@ const fieldReportsResponsiveStyles = `
 `;
 function FieldReportsResponsiveStyles(){return <style>{fieldReportsResponsiveStyles}</style>}
 
-function FieldReports({reports,setReports,alerts,setAlerts,isOnline,pendingSyncCount,syncNow,lastSync,reportForm,setReportForm,setPage}) {
-  const submit=e=>{
+function getStoredAuthToken(){
+  try{
+    const preferredKeys=["access_token","accessToken","token","ner-logix-token","nerlogix-token","nerlogix_auth","ner-logix-auth","auth"];
+    for(const key of preferredKeys){
+      const raw=localStorage.getItem(key);
+      if(!raw) continue;
+      try{
+        const parsed=JSON.parse(raw);
+        const token=parsed?.access_token||parsed?.accessToken||parsed?.token;
+        if(typeof token==="string"&&token.trim()) return token;
+      }catch(_){
+        if(typeof raw==="string"&&raw.length>20) return raw;
+      }
+    }
+    for(let i=0;i<localStorage.length;i++){
+      const key=localStorage.key(i)||"";
+      if(!/token|auth|session/i.test(key)) continue;
+      const raw=localStorage.getItem(key);
+      if(!raw) continue;
+      try{
+        const parsed=JSON.parse(raw);
+        const token=parsed?.access_token||parsed?.accessToken||parsed?.token;
+        if(typeof token==="string"&&token.trim()) return token;
+      }catch(_){
+        if(raw.length>20) return raw;
+      }
+    }
+  }catch(_){ }
+  return "";
+}
+
+function FieldReports({reports,setReports,alerts,setAlerts,isOnline,pendingSyncCount,syncNow,lastSync,reportForm,setReportForm,setPage,user,token}) {
+  const [selectedImage,setSelectedImage]=useState(null);
+  const [imagePreview,setImagePreview]=useState("");
+  const [serverReports,setServerReports]=useState([]);
+  const [serverLoading,setServerLoading]=useState(false);
+  const [serverMessage,setServerMessage]=useState("");
+  const [reviewNotes,setReviewNotes]=useState({});
+  const [reviewLoading,setReviewLoading]=useState({});
+
+  const authToken=token||getStoredAuthToken();
+  const isAdmin=user?.role==="GOVERNMENT_ADMIN";
+
+  async function loadServerReports(showMessage=false){
+    if(!authToken) return;
+    setServerLoading(true);
+    try{
+      const response=await fetch(`${API_BASE_URL}/api/reports`,{
+        headers:{Authorization:`Bearer ${authToken}`}
+      });
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(payload.detail||`HTTP ${response.status}`);
+      const list=Array.isArray(payload)?payload:(Array.isArray(payload.reports)?payload.reports:[]);
+      setServerReports(list);
+      const safeLocalReports=list.map(item=>({...item,type:item.type||item.incident_type,icon:iconFor(item.type||item.incident_type),syncStatus:"Synced",time:"Just now"}));
+      setReports(safeLocalReports);
+      setServerMessage(showMessage?"Reports refreshed successfully.":"");
+    }catch(error){
+      setServerMessage(`Backend field-report service unavailable: ${error.message}`);
+    }finally{
+      setServerLoading(false);
+    }
+  }
+
+  useEffect(()=>{loadServerReports();},[authToken,user?.role]);
+
+  function handleImageChange(e){
+    const file=e.target.files?.[0];
+    if(!file){setSelectedImage(null);setImagePreview("");return;}
+    if(!["image/jpeg","image/png","image/webp"].includes(file.type)){
+      window.alert("Please upload a JPG, PNG, or WEBP image.");
+      e.target.value="";
+      return;
+    }
+    if(file.size>5*1024*1024){
+      window.alert("Image must be 5 MB or smaller.");
+      e.target.value="";
+      return;
+    }
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  }
+
+  useEffect(()=>()=>{if(imagePreview) URL.revokeObjectURL(imagePreview)},[imagePreview]);
+
+  async function submit(e){
     e.preventDefault();
-    const id=Date.now();
     const latitude=Number(reportForm.latitude);
     const longitude=Number(reportForm.longitude);
-
     if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||latitude<-90||latitude>90||longitude<-180||longitude>180){
       window.alert("Please select the incident location on the map or enter valid latitude and longitude.");
       return;
     }
-
-    const r={
-      id,
-      ...reportForm,
-      latitude,
-      longitude,
-      icon:iconFor(reportForm.type),
-      time:"Just now",
-      status:"Open",
-      syncStatus:isOnline?"Synced":"Pending"
-    };
-
-    setReports(x=>[r,...x]);
-
-    if(["High","Critical"].includes(r.severity)){
-      setAlerts(x=>[{
-        id:id+1,
-        type:`Field Report: ${r.type}`,
-        icon:r.icon,
-        severity:r.severity,
-        location:r.location,
-        latitude:r.latitude,
-        longitude:r.longitude,
-        description:r.description,
-        time:"Just now",
-        status:"Open"
-      },...x]);
+    if(!selectedImage){
+      window.alert("Please upload an incident evidence image before submitting the report.");
+      return;
+    }
+    if(!authToken){
+      window.alert("Your session has expired. Please log in again.");
+      return;
     }
 
-    setReportForm(x=>({...x,description:""}));
-    setPage("Live Map");
-  };
+    const form=new FormData();
+    form.append("incident_type",reportForm.type);
+    form.append("severity",reportForm.severity);
+    form.append("location",reportForm.location);
+    form.append("reporter",reportForm.reporter);
+    form.append("latitude",String(latitude));
+    form.append("longitude",String(longitude));
+    form.append("description",reportForm.description);
+    form.append("image",selectedImage);
+
+    try{
+      setServerMessage("📤 Uploading report and evidence image...");
+      const response=await fetch(`${API_BASE_URL}/api/reports`,{
+        method:"POST",
+        headers:{Authorization:`Bearer ${authToken}`},
+        body:form
+      });
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(payload.detail||`HTTP ${response.status}`);
+      const data=payload.report||payload;
+      const localReport={...data,type:data.type||data.incident_type,icon:iconFor(data.type||data.incident_type),syncStatus:"Synced",status:data.status||"PENDING",time:"Just now"};
+      setReports(x=>[localReport,...x.filter(item=>item.id!==data.id)]);
+      setServerReports(x=>[data,...x.filter(item=>item.id!==data.id)]);
+      setReportForm(x=>({...x,description:""}));
+      setSelectedImage(null);
+      setImagePreview("");
+      const fileInput=document.getElementById("field-report-image-input");
+      if(fileInput) fileInput.value="";
+      setServerMessage("✅ Report submitted with image. It is now waiting for Government Admin approval.");
+    }catch(error){
+      setServerMessage(`❌ ${error.message}`);
+    }
+  }
+
+  async function reviewReport(reportId,action){
+    if(!authToken) return;
+    const note=String(reviewNotes[reportId]||"").trim();
+    if(action==="reject"&&!note){
+      window.alert("Please enter a rejection reason before rejecting the report.");
+      return;
+    }
+    setReviewLoading(x=>({...x,[reportId]:action}));
+    try{
+      const form=new FormData();
+      if(action==="approve") form.append("review_note",note);
+      else form.append("reason",note);
+      const response=await fetch(`${API_BASE_URL}/api/reports/${reportId}/${action}`,{
+        method:"PATCH",
+        headers:{Authorization:`Bearer ${authToken}`},
+        body:form
+      });
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(payload.detail||`HTTP ${response.status}`);
+      const data=payload.report||payload;
+      setServerReports(x=>x.map(r=>r.id===data.id?data:r));
+      setReports(x=>x.map(r=>r.id===data.id?{...r,...data,type:data.type||data.incident_type||r.type,icon:iconFor(data.type||data.incident_type||r.type),syncStatus:"Synced"}:r));
+      setReviewNotes(x=>({...x,[reportId]:""}));
+      setServerMessage(action==="approve"?"✅ Field report approved successfully.":"🛑 Field report rejected with the recorded reason.");
+      if(action==="approve"&&["HIGH","CRITICAL","High","Critical"].includes(data.severity)){
+        const alertId=`field-${data.id}`;
+        setAlerts(x=>[{
+          id:alertId,
+          type:`Field Report: ${data.type||data.incident_type}`,
+          icon:iconFor(data.type||data.incident_type),
+          severity:String(data.severity).replace(/^./,m=>m.toUpperCase()),
+          location:data.location,
+          latitude:data.latitude,
+          longitude:data.longitude,
+          description:data.description,
+          time:"Just now",
+          status:"Open"
+        },...x.filter(a=>a.id!==alertId)]);
+      }
+    }catch(error){
+      setServerMessage(`❌ ${error.message}`);
+    }finally{
+      setReviewLoading(x=>{const next={...x};delete next[reportId];return next});
+    }
+  }
+
+  async function viewImage(report){
+    if(!report?.image_url){window.alert("No evidence image is attached to this report.");return;}
+    if(!authToken){window.alert("Your session has expired. Please log in again.");return;}
+    try{
+      const response=await fetch(`${API_BASE_URL}${report.image_url}`,{headers:{Authorization:`Bearer ${authToken}`} });
+      if(!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob=await response.blob();
+      const url=URL.createObjectURL(blob);
+      const win=window.open(url,"_blank","noopener,noreferrer");
+      if(!win) window.location.href=url;
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }catch(error){window.alert(`Unable to open image: ${error.message}`);}
+  }
+
+  const visibleReports=serverReports.length?serverReports:reports;
+  const pendingReports=serverReports.filter(r=>String(r.status||"").toUpperCase()==="PENDING");
 
   return (
     <>
       <FieldReportsResponsiveStyles />
+      <style>{`\
+        .field-report-image-box{border:1px solid #dbe4ee;border-radius:16px;background:#f8fafc;padding:12px}\
+        .field-report-image-preview{width:100%;max-height:260px;object-fit:cover;border-radius:12px;border:1px solid #dbe4ee;display:block}\
+        .field-report-upload-label{display:flex;align-items:center;justify-content:center;min-height:125px;border:2px dashed #93c5fd;border-radius:16px;background:#eff6ff;color:#1d4ed8;font-weight:800;cursor:pointer;text-align:center;padding:16px}\
+        .field-report-admin-card{border:1px solid #dbe4ee;border-radius:18px;padding:16px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.06)}\
+        .field-report-admin-grid{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(0,1.2fr);gap:16px;align-items:start}\
+        .field-report-review-actions{display:flex;gap:10px;flex-wrap:wrap}\
+        .field-report-review-actions button{min-height:44px}\
+        .field-report-status{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:800}\
+        .field-report-status.pending{background:#fff7ed;color:#c2410c}.field-report-status.approved{background:#ecfdf5;color:#047857}.field-report-status.rejected{background:#fef2f2;color:#b91c1c}\
+        @media(max-width:700px){.field-report-admin-grid{grid-template-columns:1fr}.field-report-review-actions{display:grid;grid-template-columns:1fr 1fr}.field-report-review-actions button{width:100%}}\
+        @media(max-width:420px){.field-report-review-actions{grid-template-columns:1fr}}\
+      `}</style>
+
       <div className="panel">
         <div className="panel-header">
-          <div>
-            <h2>📍 Field Intelligence</h2>
-            <p>Geo-tagged incident reporting with offline-first synchronization</p>
-          </div>
+          <div><h2>📍 Field Intelligence</h2><p>Geo-tagged incident reporting with evidence image and administrator review</p></div>
           <button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button>
         </div>
-
         <div style={{marginTop:16,padding:14,borderRadius:13,background:isOnline?"#f0fdf4":"#fff7ed",border:`1px solid ${isOnline?"#bbf7d0":"#fed7aa"}`,display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-          <div>
-            <b>{isOnline?"🟢 Online & Sync Ready":"🟠 Offline & Saving Locally"}</b>
-            <div style={{fontSize:12,marginTop:4}}>
-              {pendingSyncCount} pending report(s) · {lastSync?`Last sync ${new Date(lastSync).toLocaleString()}`:"No sync recorded"}
-            </div>
-          </div>
-          <button className="route-button" onClick={syncNow} disabled={!isOnline||pendingSyncCount===0}>
-            🔄 Sync {pendingSyncCount?`(${pendingSyncCount})`:""}
-          </button>
+          <div><b>{isOnline?"🟢 Online & Sync Ready":"🟠 Offline & Saving Locally"}</b><div style={{fontSize:12,marginTop:4}}>{pendingSyncCount} pending report(s) · {lastSync?`Last sync ${new Date(lastSync).toLocaleString()}`:"No sync recorded"}</div></div>
+          <button className="route-button" onClick={()=>loadServerReports(true)} disabled={serverLoading||!authToken}>{serverLoading?"Loading...":"🔄 Refresh Reports"}</button>
         </div>
+        {serverMessage&&<div style={{marginTop:12,padding:12,borderRadius:12,background:"#f8fafc",border:"1px solid #e2e8f0",fontWeight:700,fontSize:13}}>{serverMessage}</div>}
       </div>
 
       <div className="field-reports-layout" style={{display:"grid",gridTemplateColumns:"minmax(320px,.85fr) minmax(400px,1.4fr)",gap:18,marginTop:18}}>
         <div className="panel">
-          <h2>📝 New Field Report</h2>
-          <p>Submit road, weather or accessibility intelligence</p>
-
+          <h2>📝 New Field Report</h2><p>Submit road, weather or accessibility intelligence</p>
           <form onSubmit={submit} style={{marginTop:16}}>
-            {[
-              ["Incident Type","type",["Road Blockage","Landslide","Flood","Heavy Rainfall","Road Damage","Vehicle Incident","Other"]],
-              ["Severity","severity",["Low","Medium","High","Critical"]]
-            ].map(([l,k,opts])=>(
-              <div className="form-group" key={k}>
-                <label>{l}</label>
-                <select value={reportForm[k]} onChange={e=>setReportForm(x=>({...x,[k]:e.target.value}))}>
-                  {opts.map(o=><option key={o}>{o}</option>)}
-                </select>
-              </div>
-            ))}
-
-            <div className="form-group">
-              <label>Location / District</label>
-              <input required value={reportForm.location} onChange={e=>setReportForm(x=>({...x,location:e.target.value}))}/>
-            </div>
-
-            <div className="form-group">
-              <label>Reporter / Field Unit</label>
-              <input required value={reportForm.reporter} onChange={e=>setReportForm(x=>({...x,reporter:e.target.value}))}/>
-            </div>
-
+            {[["Incident Type","type",["Road Blockage","Landslide","Flood","Heavy Rainfall","Road Damage","Vehicle Incident","Other"]],["Severity","severity",["Low","Medium","High","Critical"]]].map(([l,k,opts])=><div className="form-group" key={k}><label>{l}</label><select value={reportForm[k]} onChange={e=>setReportForm(x=>({...x,[k]:e.target.value}))}>{opts.map(o=><option key={o}>{o}</option>)}</select></div>)}
+            <div className="form-group"><label>Location / District</label><input required value={reportForm.location} onChange={e=>setReportForm(x=>({...x,location:e.target.value}))}/></div>
+            <div className="form-group"><label>Reporter / Field Unit</label><input required value={reportForm.reporter} onChange={e=>setReportForm(x=>({...x,reporter:e.target.value}))}/></div>
             <div className="field-coordinates-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <div className="form-group">
-                <label>Latitude</label>
-                <input
-                  required
-                  value={reportForm.latitude}
-                  onChange={e=>setReportForm(x=>({...x,latitude:e.target.value}))}
-                  placeholder="Select from map"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Longitude</label>
-                <input
-                  required
-                  value={reportForm.longitude}
-                  onChange={e=>setReportForm(x=>({...x,longitude:e.target.value}))}
-                  placeholder="Select from map"
-                />
-              </div>
+              <div className="form-group"><label>Latitude</label><input required value={reportForm.latitude} onChange={e=>setReportForm(x=>({...x,latitude:e.target.value}))} placeholder="Select from map"/></div>
+              <div className="form-group"><label>Longitude</label><input required value={reportForm.longitude} onChange={e=>setReportForm(x=>({...x,longitude:e.target.value}))} placeholder="Select from map"/></div>
             </div>
-
+            <div className="form-group"><label>Description</label><textarea required rows="5" value={reportForm.description} onChange={e=>setReportForm(x=>({...x,description:e.target.value}))} placeholder="Describe incident, road condition or accessibility issue..."/></div>
             <div className="form-group">
-              <label>Description</label>
-              <textarea required rows="5" value={reportForm.description} onChange={e=>setReportForm(x=>({...x,description:e.target.value}))} placeholder="Describe incident, road condition or accessibility issue..."/>
+              <label>📷 Incident Evidence Image <span style={{color:"#dc2626"}}>*</span></label>
+              <label htmlFor="field-report-image-input" className="field-report-upload-label">{imagePreview?"📷 Change evidence image":"📷 Click here to upload incident image"}</label>
+              <input id="field-report-image-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageChange} style={{display:"none"}} />
+              <small style={{display:"block",marginTop:6,color:"#64748b"}}>JPG, PNG or WEBP · maximum 5 MB · image will be sent to the Government Admin for review.</small>
+              {imagePreview&&<div className="field-report-image-box" style={{marginTop:10}}><img className="field-report-image-preview" src={imagePreview} alt="Selected incident evidence"/></div>}
             </div>
-
-            <button className="route-button" style={{width:"100%"}}>
-              📡 Save Geo-Tagged Report
-            </button>
+            <button type="submit" className="route-button" style={{width:"100%",minHeight:48,cursor:(serverLoading||!authToken)?"not-allowed":"pointer",opacity:(serverLoading||!authToken)?0.65:1}} disabled={serverLoading||!authToken}>{serverLoading?"📤 Uploading...":"📡 Submit Report for Admin Approval"}</button>
           </form>
         </div>
 
         <div style={{display:"grid",gap:18}}>
-          <FieldReportMap
-            reports={reports}
-            alerts={alerts}
-            reportForm={reportForm}
-            setReportForm={setReportForm}
-          />
+          <FieldReportMap reports={reports} alerts={alerts} reportForm={reportForm} setReportForm={setReportForm}/>
 
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>🛰️ Report Queue</h2>
-                <p>Persisted field intelligence</p>
-              </div>
-            </div>
-
-            <div style={{marginTop:16}}>
-              {reports.map(r=>(
-                <div className={`alert-row ${r.severity==="Critical"?"critical":r.severity==="Low"?"info":"warning"}`} key={r.id} style={{marginBottom:10}}>
-                  <div className="alert-icon">{r.icon}</div>
+          {isAdmin&&<div className="panel">
+            <div className="panel-header"><div><h2>🛡️ Admin Review</h2><p>Review evidence images and decide whether each report should be approved or rejected</p></div><span className="live-badge">{pendingReports.length} PENDING</span></div>
+            <div style={{marginTop:16,display:"grid",gap:14}}>
+              {pendingReports.length===0&&<div style={{padding:20,textAlign:"center",color:"#64748b"}}>No pending reports waiting for approval.</div>}
+              {pendingReports.map(r=><div className="field-report-admin-card" key={r.id}>
+                <div className="field-report-admin-grid">
                   <div>
-                    <div>
-                      <b>{r.type}</b> <span className={sevClass(r.severity)}>{r.severity}</span>
-                    </div>
-                    <span>{r.location}</span>
-                    <small style={{display:"block",marginTop:4}}>👤 {r.reporter} · 📍 {r.latitude}, {r.longitude}</small>
-                    <small style={{display:"block",marginTop:4}}>{r.description}</small>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><b>{iconFor(r.type||r.incident_type)} {r.type||r.incident_type}</b><span className={sevClass(String(r.severity||"").replace(/^./,m=>m.toUpperCase()))}>{r.severity}</span><span className="field-report-status pending">PENDING</span></div>
+                    <div style={{marginTop:8}}><b>📍 {r.location}</b></div>
+                    <small style={{display:"block",marginTop:5}}>👤 {r.reporter} · 📌 {r.latitude}, {r.longitude}</small>
+                    <div style={{marginTop:12,padding:12,borderRadius:12,background:"#f8fafc",border:"1px solid #e2e8f0",lineHeight:1.5}}>{r.description||"No description provided."}</div>
+                    <button className="view-button" style={{marginTop:12,width:"100%"}} onClick={()=>viewImage(r)} disabled={!r.image_url}>🖼️ {r.image_url?"View Uploaded Evidence Image":"No Image Attached"}</button>
                   </div>
-                  <div><small>{r.syncStatus==="Pending"?"⏳ Pending":"✓ Synced"}</small></div>
+                  <div>
+                    {r.image_url?<div className="field-report-image-box"><div style={{fontWeight:800,marginBottom:8}}>Evidence Image</div><button className="view-button" style={{width:"100%",minHeight:180}} onClick={()=>viewImage(r)}>🖼️ Open Image</button><small style={{display:"block",marginTop:8,color:"#64748b"}}>The protected image is opened using your authenticated admin session.</small></div>:<div className="field-report-image-box" style={{textAlign:"center",color:"#64748b"}}>No evidence image attached.</div>}
+                    <div className="form-group" style={{marginTop:12}}><label>Review note / rejection reason</label><textarea rows="3" value={reviewNotes[r.id]||""} onChange={e=>setReviewNotes(x=>({...x,[r.id]:e.target.value}))} placeholder="Optional for approval; required for rejection..."/></div>
+                    <div className="field-report-review-actions"><button className="route-button" disabled={!!reviewLoading[r.id]} onClick={()=>reviewReport(r.id,"approve")}>{reviewLoading[r.id]==="approve"?"Approving...":"✓ Approve Report"}</button><button className="view-button" disabled={!!reviewLoading[r.id]} onClick={()=>reviewReport(r.id,"reject")} style={{border:"1px solid #fecaca",color:"#b91c1c"}}>{reviewLoading[r.id]==="reject"?"Rejecting...":"✕ Reject Report"}</button></div>
+                  </div>
                 </div>
-              ))}
+              </div>)}
             </div>
-          </div>
+          </div>}
+
+          <div className="panel"><div className="panel-header"><div><h2>🛰️ Report Queue</h2><p>Reports and their current review status</p></div></div><div style={{marginTop:16}}>
+            {visibleReports.length===0&&<div style={{padding:20,textAlign:"center",color:"#64748b"}}>No field reports yet.</div>}
+            {visibleReports.map(r=><div className={`alert-row ${String(r.severity).toUpperCase()==="CRITICAL"?"critical":String(r.severity).toUpperCase()==="LOW"?"info":"warning"}`} key={r.id} style={{marginBottom:10}}><div className="alert-icon">{iconFor(r.type||r.incident_type)}</div><div style={{minWidth:0}}><div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><b>{r.type||r.incident_type}</b><span className={sevClass(String(r.severity||"").replace(/^./,m=>m.toUpperCase()))}>{r.severity}</span><span className={`field-report-status ${String(r.status||"PENDING").toLowerCase()}`}>{r.status||"PENDING"}</span></div><span>{r.location}</span><small style={{display:"block",marginTop:4}}>👤 {r.reporter} · 📍 {r.latitude}, {r.longitude}</small><small style={{display:"block",marginTop:4}}>{r.description}</small>{r.review_note&&<small style={{display:"block",marginTop:4,fontWeight:700}}>📝 Review: {r.review_note}</small>}</div><div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}><small>{r.image_url?"📷 Image attached":"No image"}</small>{r.image_url&&<button className="view-button" onClick={()=>viewImage(r)}>View</button>}</div></div>)}
+          </div></div>
         </div>
       </div>
     </>
@@ -2850,7 +2925,7 @@ function useNERLogixLanguage(language) {
 function EmergencyCenter({emergencies,setEmergencies,setAlerts,setPage,language}) { const [form,setForm]=useState({type:"Road Blockage",severity:"Critical",location:"Tawang, Arunachal Pradesh",message:""}); const broadcast=e=>{e.preventDefault();const id=Date.now();const item={id,...form,icon:iconFor(form.type),time:"Just now",status:"Broadcasted"};setEmergencies(x=>[item,...x]);const coords=locationToCoordinates(form.location);setAlerts(x=>[{id:id+1,type:`Emergency: ${form.type}`,icon:item.icon,severity:form.severity,location:form.location,latitude:coords?.[0],longitude:coords?.[1],description:form.message,time:"Just now",status:"Open"},...x]);setForm(x=>({...x,message:""}));}; const ack=id=>setEmergencies(x=>x.map(e=>e.id===id?{...e,status:"Acknowledged"}:e)); const esc=id=>setEmergencies(x=>x.map(e=>e.id===id?{...e,status:"Escalated"}:e)); const critical=emergencies.filter(e=>e.severity==="Critical"&&e.status!=="Resolved").length; return <><div className="panel"><div className="panel-header"><div><h2>🆘 Emergency Command Center</h2><p>Broadcast, acknowledge and escalate critical regional incidents</p></div><button className="view-button" onClick={()=>setPage("Dashboard")}>← Dashboard</button></div><div className="stats-grid" style={{marginTop:18}}>{[["🚨","Active Emergencies",emergencies.length,"Response queue"],["📡","Broadcasts Sent",emergencies.length,"Regional notifications"],["🔴","Critical Events",critical,"Immediate attention"]].map(x=><div className="stat-card" key={x[1]}><div className="stat-icon">{x[0]}</div><div><span>{x[1]}</span><strong>{x[2]}</strong><small>{x[3]}</small></div></div>)}</div></div><div className="panel" style={{marginTop:18}}><h2>📢 Broadcast Emergency Alert</h2><p>Publish a centralized operational alert for response teams.</p><form onSubmit={broadcast} style={{marginTop:16}}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14}}><div className="form-group"><label>Incident Type</label><select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{["Landslide","Flood","Road Blockage","Heavy Rainfall","Vehicle Incident","Medical Emergency"].map(x=><option key={x}>{x}</option>)}</select></div><div className="form-group"><label>Severity</label><select value={form.severity} onChange={e=>setForm({...form,severity:e.target.value})}>{["Critical","High","Medium"].map(x=><option key={x}>{x}</option>)}</select></div><div className="form-group"><label>Location / District</label><input required value={form.location} onChange={e=>setForm({...form,location:e.target.value})}/></div></div><div className="form-group"><label>Emergency Message</label><textarea required rows="4" value={form.message} onChange={e=>setForm({...form,message:e.target.value})} placeholder="Describe the emergency and required action..."/></div><button className="route-button">📡 Broadcast Alert</button></form></div><div className="panel" style={{marginTop:18}}><div className="panel-header"><div><h2>⚡ Emergency Workflow</h2><p>Detect → Broadcast → Acknowledge → Escalate</p></div></div><div style={{display:"grid",gap:12,marginTop:16}}>{emergencies.map(e=><div key={e.id} style={{padding:16,border:"1px solid #e5e7eb",borderRadius:14,background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><b>{e.icon} {e.type} · {e.location}</b><div style={{marginTop:5,fontSize:13}}>{e.message}</div></div><span className={sevClass(e.severity)}>{e.severity}</span></div><div style={{display:"flex",justifyContent:"space-between",gap:12,marginTop:12,flexWrap:"wrap"}}><small>{e.time} · <b>{e.status}</b></small><div style={{display:"flex",gap:8}}><button className="view-button" disabled={e.status==="Acknowledged"||e.status==="Escalated"} onClick={()=>ack(e.id)}>✓ Acknowledge</button><button className="view-button" disabled={e.status==="Escalated"} onClick={()=>esc(e.id)}>⬆ Escalate</button></div></div></div>)}</div></div></>; }
 
 export default function App() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
 
   const [page,setPage]=useState("Dashboard");
 
@@ -3274,7 +3349,7 @@ export default function App() {
   else if(page==="Risk Analysis") content=<RiskPage {...{riskScore,riskLevel,riskFactors,recommendation,fetchRisk,aiLoading,backendOnline,setPage}}/>;
   else if(page==="Route Optimizer") content=<RoutePage {...{vehicles,reports,alerts,riskScore,selectedRoute,alternatives,findRoute,loading:routeLoading,setPage,locations,originName,destinationName,setOriginName,setDestinationName,origin,destination,routeGeometry,routeDistance,routeDuration,routeError,pickMode,setPickMode,onMapPick:handleMapPick,setOrigin,setDestination,setSelectedRoute,setAlternatives,setRouteGeometry,setRouteDistance,setRouteDuration,setRouteError}}/>;
   else if(page==="Alerts") content=<AlertsPage {...{alerts,resolve:resolveAlert,refresh:refreshAlerts,setPage}}/>;
-  else if(page==="Field Reports") content=<FieldReports {...{reports,setReports,alerts,setAlerts,isOnline,pendingSyncCount,syncNow,lastSync,reportForm,setReportForm,setPage}}/>;
+  else if(page==="Field Reports") content=<FieldReports {...{reports,setReports,alerts,setAlerts,isOnline,pendingSyncCount,syncNow,lastSync,reportForm,setReportForm,setPage,user,token}}/>;
   else if(page==="Analytics") content=<Analytics {...{vehicles,alerts,reports,riskScore,riskFactors,setPage}}/>;
   else if(page==="Driver Registrations") content=<DriverRegistrations setPage={setPage}/>;
   else content=<EmergencyCenter {...{emergencies,setEmergencies,setAlerts,setPage,language}}/>;

@@ -1,6 +1,14 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    Boolean,
+    DateTime,
+    Text,
+)
 
 from .database import Base
 
@@ -153,5 +161,97 @@ class DriverRegistration(Base):
 
     reviewed_by = Column(
         String,
+        nullable=True
+    )
+
+
+class FieldReport(Base):
+    """
+    Stores field reports submitted by field officers.
+
+    status values:
+    - PENDING
+    - APPROVED
+    - REJECTED
+    """
+
+    __tablename__ = "field_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Incident information
+    incident_type = Column(
+        String,
+        nullable=False
+    )
+
+    severity = Column(
+        String,
+        nullable=False
+    )
+
+    location = Column(
+        String,
+        nullable=False
+    )
+
+    reporter = Column(
+        String,
+        nullable=False
+    )
+
+    # Geo-location
+    latitude = Column(
+        Float,
+        nullable=False
+    )
+
+    longitude = Column(
+        Float,
+        nullable=False
+    )
+
+    # Report description
+    description = Column(
+        Text,
+        nullable=True
+    )
+
+    # Uploaded image
+    image_filename = Column(
+        String,
+        nullable=True
+    )
+
+    image_path = Column(
+        String,
+        nullable=True
+    )
+
+    # Admin review
+    status = Column(
+        String,
+        default="PENDING",
+        nullable=False
+    )
+
+    review_note = Column(
+        Text,
+        nullable=True
+    )
+
+    reviewed_by = Column(
+        String,
+        nullable=True
+    )
+
+    # Timestamps
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    reviewed_at = Column(
+        DateTime,
         nullable=True
     )

@@ -7,6 +7,7 @@ from .database import Base, engine
 from .services.risk_engine import calculate_risk
 from .services.route_optimizer import optimize_routes
 from .auth import router as auth_router
+from .reports import router as reports_router
 
 
 # =========================================================
@@ -52,6 +53,13 @@ app.add_middleware(
 # =========================================================
 
 app.include_router(auth_router.router)
+
+
+# =========================================================
+# FIELD REPORTS ROUTER
+# =========================================================
+
+app.include_router(reports_router)
 
 
 # =========================================================
@@ -197,6 +205,7 @@ def root():
             "Authentication",
             "AI Risk Prediction",
             "Route Optimization",
+            "Field Reports",
         ],
         "docs": "/docs",
     }
